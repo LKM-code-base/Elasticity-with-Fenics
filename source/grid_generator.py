@@ -165,7 +165,7 @@ def hyper_simplex(dim, n_refinements=0):
     # mesh refinement
     if dim != 1:
         for i in range(n_refinements):
-            mesh = mesh.refine(n_refinements)
+            mesh = dlfn.refine(mesh)
 
     # MeshFunction for boundaries ids
     facet_marker = dlfn.MeshFunction("size_t", mesh, dim - 1)
