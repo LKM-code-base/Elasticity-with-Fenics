@@ -31,32 +31,21 @@ class ProblemBase:
             self._additional_field_output = []
         self._additional_field_output.append(field)
 
-    def _collect_all_boundary_ids(self):
-        """
-        Store all boundary ids specified in the MeshFunction
-        `self._boundary_markers` inside a set.
-        """
-        assert hasattr(self, "_mesh")
-        assert hasattr(self, "_boundary_markers")
-
-        self._all_boundary_ids = set()
-
-        for f in dlfn.facets(self._mesh):
-            if f.exterior():
-                self._all_boundary_ids.add(self._boundary_markers[f])
-
+    # pragma: no cover
     def _compute_stress_tensor(self):
         """
         Returns the stress tensor.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
+    # pragma: no cover
     def _compute_pressure(self):
         """
         Returns the pressure.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
+    # pragma: no cover
     def _compute_strain_tensor(self):
         """
         Returns the strain tensor.
@@ -83,12 +72,14 @@ class ProblemBase:
 
         return bc_map
 
+    # pragma: no cover
     def _get_filename(self):
         """
         Purely virtual method for setting the filename.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
+    # pragma: no cover
     def _get_solver(self):
         """
         Purely virtual method for getting the solver of the problem.
@@ -135,18 +126,21 @@ class ProblemBase:
                 for field in self._additional_field_output:
                     results_file.write(field, current_time)
 
+    # pragma: no cover
     def postprocess_solution(self):
         """
         Virtual method for additional post-processing.
         """
         pass
 
+    # pragma: no cover
     def setup_mesh(self):
         """
         Purely virtual method for setting up the mesh of the problem.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
+    # pragma: no cover
     def set_boundary_conditions(self):
         """
         Purely virtual method for specifying the boundary conditions of the
@@ -154,17 +148,24 @@ class ProblemBase:
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
+    # pragma: no cover
     def set_body_force(self):
         """
         Virtual method for specifying the body force of the problem.
         """
         pass
 
+    # pragma: no cover
     def solve_problem(self):
         """
         Purely virtual method for solving the problem.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
+
+    @property
+    def space_dim(self):
+        assert hasattr(self, "_space_dim")
+        return self._space_dim
 
 
 class LinearElasticProblem(ProblemBase):
@@ -194,6 +195,52 @@ class LinearElasticProblem(ProblemBase):
         # set numerical tolerances
         self._tol = tol
         self._maxiter = maxiter
+
+    def _compute_stress_tensor(self):
+        """
+        Returns the stress tensor.
+        """
+        assert hasattr(self, "_C")
+        solver = self._get_solver()
+        # displacement vector
+        displacement = solver.solution
+        displacement_gradient = dlfn.grad(displacement)
+        # strain tensor (symbolic)
+        strain = dlfn.Constant(0.5) * (displacement_gradient + displacement_gradient.T)
+        identity = dlfn.Identity(self._space_dim)
+        # dimensionless stress tensor (symbolic)
+        stress = dlfn.Constant(self._C) * dlfn.inner(identity, strain) * identity
+        stress += dlfn.Constant(2.0) * strain
+
+        # create function space
+        family = displacement.ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemSigma = dlfn.TensorElement("DG", cell, degree - 1,
+                                       shape=(self._space_dim, self._space_dim),
+                                       symmetry=True)
+        Wh = dlfn.FunctionSpace(self._mesh, elemSigma)
+
+        # project
+        sigma = dlfn.project(stress, Wh)
+        sigma.rename("sigma", "")
+
+        return sigma
+
+#    def _compute_pressure(self):
+#        """
+#        Returns the pressure.
+#        """
+#        raise NotImplementedError("You are calling a purely virtual method.")
+#
+#    def _compute_strain_tensor(self):
+#        """
+#        Returns the strain tensor.
+#        """
+#        raise NotImplementedError("You are calling a purely virtual method.")
+
 
     def _get_filename(self):
         """

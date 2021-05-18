@@ -25,6 +25,18 @@ class BlockTest(LinearElasticProblem):
         self._bcs = [(DisplacementBCType.fixed, BoundaryMarkers.left.value, None),
                      (DisplacementBCType.constant, BoundaryMarkers.right.value, (0.1, 0.0))]
 
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i+1, j+1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+
 
 def test_block_test():
     block_test = BlockTest(25)
