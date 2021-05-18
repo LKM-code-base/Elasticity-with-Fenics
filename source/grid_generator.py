@@ -181,13 +181,13 @@ def hyper_simplex(dim, n_refinements=0):
         gamma02.mark(facet_marker, BoundaryMarkers.right.value)
 
     elif dim == 2:
+        gamma00 = dlfn.CompiledSubDomain("on_boundary")
         gamma01 = dlfn.CompiledSubDomain("near(x[0], 0.0) && on_boundary")
         gamma02 = dlfn.CompiledSubDomain("near(x[1], 0.0) && on_boundary")
-        gamma03 = dlfn.CompiledSubDomain("!near(x[0], 0.0) && "
-                                         "!near(x[1], 0.0) && on_boundary")
-
+        # first mark the entire boundary with the diagonal id
+        gamma00.mark(facet_marker, BoundaryMarkers.diagonal.value)
+        # then mark the other edges with the correct ids
         gamma01.mark(facet_marker, BoundaryMarkers.left.value)
         gamma02.mark(facet_marker, BoundaryMarkers.bottom.value)
-        gamma03.mark(facet_marker, BoundaryMarkers.diagonal.value)
 
     return mesh, facet_marker

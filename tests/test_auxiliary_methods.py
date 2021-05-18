@@ -4,9 +4,10 @@ from grid_generator import hyper_cube
 from grid_generator import HyperCubeBoundaryMarkers
 from grid_generator import hyper_simplex
 from grid_generator import HyperSimplexBoundaryMarkers
-from auxiliary_methods import boundary_normal
 from auxiliary_methods import ElasticModuli
+from auxiliary_methods import boundary_normal
 from auxiliary_methods import compute_elasticity_coefficients
+from auxiliary_methods import extract_all_boundary_markers
 import math
 
 
@@ -14,7 +15,12 @@ def compare_tuples(a, b, tol=1.0e-15):
     assert isinstance(a, tuple)
     assert isinstance(b, tuple)
     assert isinstance(tol, float) and tol > 0.0
-    assert all(abs(x-y) < tol for x, y in zip(a, b))
+    if all(isinstance(x, int) for x in a) and all(isinstance(x, int) for x in b):
+        assert all(x == y for x, y in zip(a, b))
+    elif all(isinstance(x, float) for x in a) and all(isinstance(x, float) for x in b):
+        assert all(abs(x-y) < tol for x, y in zip(a, b))
+    else:
+        raise ValueError()
 
 
 def compare_dicts(a, b, tol=1.0e-15):
@@ -122,6 +128,37 @@ def test_elasticity_coefficients():
     compare_dicts(expected_values, computed_values, tol=tol)
 
 
+def test_extract_all_boundary_markers():
+    # cube: two-dimensional case
+    mesh, boundary_markers = hyper_cube(2, 8)
+    expected_boundary_ids = sorted((HyperCubeBoundaryMarkers.left.value,
+                                    HyperCubeBoundaryMarkers.right.value,
+                                    HyperCubeBoundaryMarkers.bottom.value,
+                                    HyperCubeBoundaryMarkers.top.value))
+    compare_tuples(tuple(extract_all_boundary_markers(mesh, boundary_markers)),
+                   tuple(expected_boundary_ids))
+
+    # cube: three-dimensional case
+    mesh, boundary_markers = hyper_cube(3, 8)
+    expected_boundary_ids = sorted((HyperCubeBoundaryMarkers.left.value,
+                                    HyperCubeBoundaryMarkers.right.value,
+                                    HyperCubeBoundaryMarkers.bottom.value,
+                                    HyperCubeBoundaryMarkers.top.value,
+                                    HyperCubeBoundaryMarkers.back.value,
+                                    HyperCubeBoundaryMarkers.front.value))
+    compare_tuples(tuple(extract_all_boundary_markers(mesh, boundary_markers)),
+                   tuple(expected_boundary_ids))
+
+    # simplex: two-dimensional case
+    mesh, boundary_markers = hyper_simplex(2, 2)
+    expected_boundary_ids = sorted((HyperSimplexBoundaryMarkers.left.value,
+                                    HyperSimplexBoundaryMarkers.bottom.value,
+                                    HyperSimplexBoundaryMarkers.diagonal.value))
+    compare_tuples(tuple(extract_all_boundary_markers(mesh, boundary_markers)),
+                   tuple(expected_boundary_ids))
+
+
 if __name__ == "__main__":
     test_boundary_normal()
     test_elasticity_coefficients()
+    test_extract_all_boundary_markers()

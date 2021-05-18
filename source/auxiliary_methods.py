@@ -248,3 +248,17 @@ def compute_elasticity_coefficients(**kwargs):
     assert all(isfinite(x) for x in return_dict.values())
 
     return return_dict
+
+
+def extract_all_boundary_markers(mesh, mesh_function):
+    """
+    Stores all boundary markers of the MeshFunction inside a set.
+    """
+    assert isinstance(mesh, dlfn.Mesh)
+    assert isinstance(mesh_function, (dlfn.cpp.mesh.MeshFunctionSizet,
+                                      dlfn.cpp.mesh.MeshFunctionInt))
+    boundary_markers = set()
+    for f in dlfn.facets(mesh):
+        if f.exterior():
+            boundary_markers.add(mesh_function[f])
+    return boundary_markers
