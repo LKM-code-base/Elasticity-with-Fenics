@@ -229,19 +229,6 @@ class LinearElasticProblem(ProblemBase):
 
         return sigma
 
-#    def _compute_pressure(self):
-#        """
-#        Returns the pressure.
-#        """
-#        raise NotImplementedError("You are calling a purely virtual method.")
-#
-#    def _compute_strain_tensor(self):
-#        """
-#        Returns the strain tensor.
-#        """
-#        raise NotImplementedError("You are calling a purely virtual method.")
-
-
     def _get_filename(self):
         """
         Class method returning a filename.
@@ -281,7 +268,12 @@ class LinearElasticProblem(ProblemBase):
 
         else:
             # extract elastic moduli
-            elastic_moduli = compute_elasticity_coefficients(**kwargs)
+            cleaned_kwargs = kwargs.copy()
+            if "lref" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("lref")
+            if "bref" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("bref")
+            elastic_moduli = compute_elasticity_coefficients(**cleaned_kwargs)
             lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
             mu = elastic_moduli[ElasticModuli.ShearModulus]
             # 1st dimensionless coefficient

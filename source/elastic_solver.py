@@ -35,9 +35,6 @@ class LinearElasticitySolver():
     # class variables
     _sub_space_association = {0: "displacement"}
     _field_association = {value: key for key, value in _sub_space_association.items()}
-    _apply_body_force = False
-    _body_force_specified = False
-    _apply_boundary_traction = False
     _null_scalar = dlfn.Constant(0.)
 
     def __init__(self, mesh, boundary_markers):
@@ -45,7 +42,6 @@ class LinearElasticitySolver():
         assert isinstance(mesh, dlfn.Mesh)
         assert isinstance(boundary_markers, (dlfn.cpp.mesh.MeshFunctionSizet,
                                              dlfn.cpp.mesh.MeshFunctionInt))
-
         # set mesh variables
         self._mesh = mesh
         self._boundary_markers = boundary_markers
@@ -135,8 +131,9 @@ class LinearElasticitySolver():
         assert hasattr(self, "_Vh")
         assert hasattr(self, "_boundary_markers")
         assert hasattr(self, "_displacement_bcs")
-        # dirichlet bcs
+        # empty dirichlet bcs
         self._dirichlet_bcs = []
+
         # displacement part
         for bc in self._displacement_bcs:
             # unpack values
@@ -172,12 +169,14 @@ class LinearElasticitySolver():
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.constant:
+                assert isinstance(value, (tuple, list))
                 const_function = dlfn.Constant(value)
                 bc_object = dlfn.DirichletBC(self._Vh, const_function,
                                              self._boundary_markers, bndry_id)
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.constant_component:
+                assert isinstance(value, float)
                 const_function = dlfn.Constant(value)
                 bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
                                              const_function,
@@ -185,11 +184,13 @@ class LinearElasticitySolver():
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.function:
+                assert isinstance(value, dlfn.Expression)
                 bc_object = dlfn.DirichletBC(self._Vh, value,
                                              self._boundary_markers, bndry_id)
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.function_component:
+                assert isinstance(value, dlfn.Expression)
                 bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
                                              value,
                                              self._boundary_markers, bndry_id)
@@ -197,6 +198,8 @@ class LinearElasticitySolver():
 
             else:  # pragma: no cover
                 raise RuntimeError()
+
+            # HINT: traction boundary conditions are covered in _setup_problem
 
     def _setup_problem(self):
         """
@@ -230,16 +233,40 @@ class LinearElasticitySolver():
 
         # virtual work of external forces
         dw_ext = dlfn.dot(self._null_vector, v) * dV
+
         # add body force term
-        if self._apply_body_force is True:
-            assert hasattr(self, "_body_force"), "Body force is not specified."
+        if hasattr(self, "_body_force"):
             assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
                                         "the body forces is not specified."
             dw_ext += self._D * dot(self._body_force, v) * dV
+
         # add boundary tractions
         if hasattr(self, "_traction_bcs"):
-            for bndry_id, traction in self._traction_bcs.items():
-                dw_ext -= dot(traction, v) * dA(bndry_id)
+            for bc in self._traction_bcs:
+                # unpack values
+                if len(bc) == 3:
+                    bc_type, bndry_id, traction = bc
+                elif len(bc) == 4:
+                    bc_type, bndry_id, component_index, traction = bc
+
+                if bc_type is TractionBCType.constant:
+                    assert isinstance(traction, (tuple, list))
+                    const_function = dlfn.Constant(traction)
+                    dw_ext += dot(const_function , v) * dA(bndry_id)
+
+                elif bc_type is TractionBCType.constant_component:
+                    assert isinstance(traction, float)
+                    const_function = dlfn.Constant(traction)
+                    dw_ext += const_function * v[component_index] * dA(bndry_id)
+
+                elif bc_type is TractionBCType.function:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext += dot(traction, v) * dA(bndry_id)
+
+                elif bc_type is TractionBCType.function_component:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext += traction * v[component_index] * dA(bndry_id)
+
         # linear variational problem
         self._linear_problem = dlfn.LinearVariationalProblem(dw_int, dw_ext,
                                                              self._solution,
@@ -361,9 +388,9 @@ class LinearElasticitySolver():
             The body force.
         """
         assert isinstance(body_force, (dlfn.Expression, dlfn.Constant))
-        assert body_force.ufl_shape[0] == self._space_dim
+        # check rank of expression
+        assert body_force.value_rank() == 1
         self._body_force = body_force
-        self._body_force_specified = True
 
     def solve(self):
         """
