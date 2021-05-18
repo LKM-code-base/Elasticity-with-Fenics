@@ -6,6 +6,8 @@ from enum import Enum, auto
 import dolfin as dlfn
 from dolfin import grad, div, dot, inner
 
+from auxiliary_methods import extract_all_boundary_markers
+
 
 class DisplacementBCType(Enum):
     fixed = auto()
@@ -61,6 +63,59 @@ class LinearElasticitySolver():
         q_deg = self._p_deg + 2
         dlfn.parameters["form_compiler"]["quadrature_degree"] = q_deg
 
+    def _check_boundary_condition_format(self, bc):
+        """
+        Check the general format of an arbitrary boundary condition.
+        """
+        assert hasattr(self, "_mesh")
+        assert hasattr(self, "_boundary_markers")
+        # boundary ids specified in the MeshFunction
+        all_bndry_ids = extract_all_boundary_markers(self._mesh, self._boundary_markers)
+        # 0. input check
+        assert isinstance(bc, (list, tuple))
+        assert len(bc) >= 2
+        # 1. check bc type
+        assert isinstance(bc[0], (DisplacementBCType, TractionBCType))
+        rank = 1
+        # 2. check boundary id
+        assert isinstance(bc[1], int)
+        assert bc[1] in all_bndry_ids, "Boundary id {0} ".format(bc[1]) +\
+                                       "was not found in the boundary markers."
+        # 3. check value type
+        # distinguish between scalar and vector field
+        if rank == 0:
+            # scalar field (tensor of rank zero)
+            assert isinstance(bc[2], (dlfn.Expression, float)) or bc[2] is None
+            if isinstance(bc[2], dlfn.Expression):
+                # check rank of expression
+                assert bc[2].value_rank() == 0
+
+        elif rank == 1:
+            # vector field (tensor of rank one)
+            # distinguish between full or component-wise boundary conditions
+            if len(bc) == 3:
+                # full boundary condition
+                assert isinstance(bc[2], (dlfn.Expression, tuple, list)) or bc[2] is None
+                if isinstance(bc[2], dlfn.Expression):
+                    # check rank of expression
+                    assert bc[2].value_rank() == 1
+                elif isinstance(bc[2], (tuple, list)):
+                    # size of tuple or list
+                    assert len(bc[2]) == self._space_dim
+                    # type of the entries
+                    assert all(isinstance(x, float) for x in bc[2])
+
+            elif len(bc) == 4:
+                # component-wise boundary condition
+                # component index specified
+                assert isinstance(bc[2], int)
+                assert bc[2] < self._space_dim
+                # value specified
+                assert isinstance(bc[3], (dlfn.Expression, float)) or bc[3] is None
+                if isinstance(bc[3], dlfn.Expression):
+                    # check rank of expression
+                    assert bc[3].value_rank() == 0
+
     def _setup_function_spaces(self):
         """
         Class method setting up function spaces.
@@ -71,64 +126,77 @@ class LinearElasticitySolver():
         elemU = dlfn.VectorElement("CG", cell, self._p_deg)
         # mixed function space
         self._Vh = dlfn.FunctionSpace(self._mesh, elemU)
-        self._n_dofs = self._Wh.dim()
+        self._n_dofs = self._Vh.dim()
         # print info
         assert hasattr(self, "_n_cells")
         dlfn.info("Number of cells {0}, number of DoFs: {1}".format(self._n_cells, self._n_dofs))
 
     def _setup_boundary_conditions(self):
-        assert hasattr(self, "_bcs")
         assert hasattr(self, "_Vh")
         assert hasattr(self, "_boundary_markers")
+        assert hasattr(self, "_displacement_bcs")
         # dirichlet bcs
         self._dirichlet_bcs = []
         # displacement part
-        disp_bcs = self._bcs["displacement"]
-        for bc_type, bc_bndry_id, bc_value in disp_bcs:
+        for bc in self._displacement_bcs:
+            # unpack values
+            if len(bc) == 3:
+                bc_type, bndry_id, value = bc
+            elif len(bc) == 4:
+                bc_type, bndry_id, component_index, value = bc
+            else:  # pragma: no cover
+                raise RuntimeError()
+            # create dolfin.DirichletBC object
             if bc_type is DisplacementBCType.fixed:
                 bc_object = dlfn.DirichletBC(self._Vh, self._null_vector,
-                                             self._boundary_markers, bc_bndry_id)
+                                             self._boundary_markers, bndry_id)
                 self._dirichlet_bcs.append(bc_object)
 
-            elif bc_type is DisplacementBCType.function:
-                # TODO Check shape and type of variable bc_value
-                bc_object = dlfn.DirichletBC(self._Vh, bc_value,
-                                             self._boundary_markers, bc_bndry_id)
+            elif bc_type is DisplacementBCType.fixed_component:
+                bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
+                                             self._null_scalar,
+                                             self._boundary_markers, bndry_id)
+                self._dirichlet_bcs.append(bc_object)
+
+            elif bc_type is DisplacementBCType.fixed_pointwise:
+                bc_object = dlfn.DirichletBC(self._Vh, self._null_vector,
+                                             self._boundary_markers, bndry_id,
+                                             "pointwise")
+                self._dirichlet_bcs.append(bc_object)
+
+            elif bc_type is DisplacementBCType.fixed_component_pointwise:
+                bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
+                                             self._null_scalar,
+                                             self._boundary_markers, bndry_id,
+                                             "pointwise")
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.constant:
-                # TODO Check shape and type of variable bc_value
-                const_function = dlfn.Constant(bc_value)
+                const_function = dlfn.Constant(value)
                 bc_object = dlfn.DirichletBC(self._Vh, const_function,
-                                             self._boundary_markers, bc_bndry_id)
+                                             self._boundary_markers, bndry_id)
+                self._dirichlet_bcs.append(bc_object)
+
+            elif bc_type is DisplacementBCType.constant_component:
+                const_function = dlfn.Constant(value)
+                bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
+                                             const_function,
+                                             self._boundary_markers, bndry_id)
+                self._dirichlet_bcs.append(bc_object)
+
+            elif bc_type is DisplacementBCType.function:
+                bc_object = dlfn.DirichletBC(self._Vh, value,
+                                             self._boundary_markers, bndry_id)
+                self._dirichlet_bcs.append(bc_object)
+
+            elif bc_type is DisplacementBCType.function_component:
+                bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
+                                             value,
+                                             self._boundary_markers, bndry_id)
                 self._dirichlet_bcs.append(bc_object)
 
             else:  # pragma: no cover
-                # TODO Implement other types of boundary conditions
                 raise RuntimeError()
-
-        # traction boundary conditions
-        if "traction" in self._bcs:
-            self._traction_bcs = dict()
-            traction_bcs = self._bcs["traction"]
-            for bc_type, bc_bndry_id, bc_value in traction_bcs:
-
-                for _, velocity_bndry_id, _ in disp_bcs:
-                    assert velocity_bndry_id != bc_bndry_id, \
-                        ValueError("Unconsistent boundary conditions on "
-                                   "boundary with boundary id: {0}."
-                                   .format(bc_bndry_id))
-
-                if bc_type is not TractionBCType.free:
-                    # make sure that there is no velocity boundary condition on
-                    # the current boundary
-                    if bc_type is TractionBCType.constant:
-                        const_function = dlfn.Constant(bc_value)
-                        self._traction_bs[bc_bndry_id] = const_function
-                    elif bc_type is TractionBCType.function:
-                        self._traction_bs[bc_bndry_id] = bc_value
-                    else:
-                        raise NotImplementedError()
 
     def _setup_problem(self):
         """
@@ -156,9 +224,9 @@ class LinearElasticitySolver():
         # weak forms
         # virtual work of internal forces
         strain = dlfn.Constant(0.5) * (grad(u) + grad(u).T)
-        dw_int = ( C * div(u) * div(v) 
-                 + inner(dlfn.Constant(2.0) * strain, grad(u) + grad(u).T)
-                 ) * dV
+        dw_int = (C * div(u) * div(v)
+                  + inner(dlfn.Constant(2.0) * strain, grad(v) + grad(v).T)
+                  ) * dV
 
         # virtual work of external forces
         dw_ext = dlfn.dot(self._null_vector, v) * dV
@@ -182,46 +250,45 @@ class LinearElasticitySolver():
     def set_boundary_conditions(self, bcs):
         """
         Set the boundary conditions of the problem.
+
+        The boundary conditions are specified as a list of tuples where each
+        tuple represents a separate boundary condition. This means that, for
+        example,
+
+            bcs = [(Type, boundary_id, value),
+                   (Type, boundary_id, component, value)]
+
+        The first entry of each tuple specifies the type of the boundary
+        condition. The second entry specifies the boundary identifier where the
+        boundary should be applied. If full vector field is constrained through
+        the boundary condition, the third entry specifies the value. If only a
+        single component is constrained, the third entry specifies the
+        component index and the third entry specifies the value.
         """
-        assert isinstance(bcs, dict)
-        # create a set containing contrained boundaries
-        bndry_ids = set()
-        # check that boundary ids passed in the bcs dictionary 
-        # occur in the facet markers
-        bndry_ids_found = dict(zip(bndry_ids, (False, ) * len(bndry_ids)))
-        for facet in dlfn.facets(self._mesh):
-            if facet.exterior():
-                if self._boundary_markers[facet] in bndry_ids:
-                    bndry_ids_found[self._boundary_markers[facet]] = True
-                    if all(bndry_ids_found.values()):
-                        break
-        if not all(bndry_ids_found):
-            missing = [key for key, value in bndry_ids_found.items() if value is False]
-            message = "Boundary id" + ("s " if len(missing) > 1 else " ")
-            message += ", ".join(map(str, missing))
-            message += "were not found in the facet markers of the mesh."
-            raise ValueError(message)
+        assert isinstance(bcs, (list, tuple))
+        # check format
+        for bc in bcs:
+            self._check_boundary_condition_format(bc)
+        # extract displacement/traction bcs and related boundary ids
+        displacement_bcs = []
+        displacement_bc_ids = set()
+        traction_bcs = []
+        traction_bc_ids = set()
+        for bc in bcs:
+            if isinstance(bc[0], DisplacementBCType):
+                displacement_bcs.append(bc)
+                displacement_bc_ids.add(bc[1])
+            elif isinstance(bc[0], TractionBCType):
+                traction_bcs.append(bc)
+                traction_bc_ids.add(bc[1])
         # check that at least one displacement bc is specified
-        assert "displacement" in bcs
-        assert len(bcs["displacement"]) > 0
-        # check that there is no conflict between displacement between
-        # displacement and traction bcs
-        if "traction" in bcs:
-            displacement_bcs = bcs["displacement"]
-            traction_bcs = bcs["traction"]
-            # extract boundary ids with displacement bcs
-            disp_bcs_bndry_ids = set()
-            for bc in displacement_bcs:
-                assert isinstance(bc[1], int)
-                disp_bcs_bndry_ids.add(bc[1])
-            # extract boundary ids with displacement bcs
-            traction_bcs_bndry_ids = set()
-            for bc in traction_bcs:
-                assert isinstance(bc[1], int)
-                traction_bcs_bndry_ids.add(bc[1])
+        assert len(displacement_bcs) > 0
+
+        # check that there is no conflict between displacement and traction bcs
+        if len(traction_bcs) > 0:
             # compute boundary ids with simultaneous bcs
-            joint_bndry_ids = disp_bcs_bndry_ids.intersection(traction_bcs_bndry_ids)
-            # make sure that bcs are only applied component-wise 
+            joint_bndry_ids = displacement_bc_ids.intersection(traction_bc_ids)
+            # make sure that bcs are only applied component-wise
             allowedDisplacementBCTypes = (DisplacementBCType.fixed_component,
                                           DisplacementBCType.fixed_component_pointwise,
                                           DisplacementBCType.constant_component,
@@ -246,7 +313,9 @@ class LinearElasticitySolver():
                 # compare components
                 assert traction_bc_component != disp_bc_component
         # boundary conditions accepted
-        self._bcs = bcs
+        self._displacement_bcs = displacement_bcs
+        if len(traction_bcs) > 0:
+            self._traction_bcs = traction_bcs
 
     def set_dimensionless_numbers(self, C, D=None):
         """
@@ -260,7 +329,7 @@ class LinearElasticitySolver():
             self._C = dlfn.Constant(C)
         else:
             self._C.assign(C)
-            
+
         if D is not None:
             assert isinstance(D, float)
             assert isfinite(D)
