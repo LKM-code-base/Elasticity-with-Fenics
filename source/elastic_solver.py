@@ -224,11 +224,17 @@ class LinearElasticitySolver():
 
         # dimensionless parameters
         C = self._C
+        
+        # auxiliary function
+        def sym_grad(u):
+            return dlfn.Constant(0.5) * (grad(u) + grad(u).T)
+        
         # weak forms
         # virtual work of internal forces
-        strain = dlfn.Constant(0.5) * (grad(u) + grad(u).T)
-        dw_int = (C * div(u) * div(v)
-                  + inner(dlfn.Constant(2.0) * strain, grad(v) + grad(v).T)
+        strain = sym_grad(u)
+        dstrain = sym_grad(v)
+        dw_int = (C * dlfn.tr(strain) * dlfn.tr(dstrain)
+                  + inner(dlfn.Constant(2.0) * strain, dstrain)
                   ) * dV
 
         # virtual work of external forces
