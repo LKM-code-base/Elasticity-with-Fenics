@@ -31,22 +31,19 @@ class ProblemBase:
             self._additional_field_output = []
         self._additional_field_output.append(field)
 
-    # pragma: no cover
-    def _compute_stress_tensor(self):
+    def _compute_stress_tensor(self):  # pragma: no cover
         """
         Returns the stress tensor.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    # pragma: no cover
-    def _compute_pressure(self):
+    def _compute_pressure(self):  # pragma: no cover
         """
         Returns the pressure.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    # pragma: no cover
-    def _compute_strain_tensor(self):
+    def _compute_strain_tensor(self):  # pragma: no cover
         """
         Returns the strain tensor.
         """
@@ -72,15 +69,13 @@ class ProblemBase:
 
         return bc_map
 
-    # pragma: no cover
-    def _get_filename(self):
+    def _get_filename(self):  # pragma: no cover
         """
         Purely virtual method for setting the filename.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    # pragma: no cover
-    def _get_solver(self):
+    def _get_solver(self):  # pragma: no cover
         """
         Purely virtual method for getting the solver of the problem.
         """
@@ -126,37 +121,32 @@ class ProblemBase:
                 for field in self._additional_field_output:
                     results_file.write(field, current_time)
 
-    # pragma: no cover
-    def postprocess_solution(self):
+    def postprocess_solution(self):  # pragma: no cover
         """
         Virtual method for additional post-processing.
         """
         pass
 
-    # pragma: no cover
-    def setup_mesh(self):
+    def setup_mesh(self):  # pragma: no cover
         """
         Purely virtual method for setting up the mesh of the problem.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    # pragma: no cover
-    def set_boundary_conditions(self):
+    def set_boundary_conditions(self):  # pragma: no cover
         """
         Purely virtual method for specifying the boundary conditions of the
         problem.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    # pragma: no cover
-    def set_body_force(self):
+    def set_body_force(self):  # pragma: no cover
         """
         Virtual method for specifying the body force of the problem.
         """
         pass
 
-    # pragma: no cover
-    def solve_problem(self):
+    def solve_problem(self):  # pragma: no cover
         """
         Purely virtual method for solving the problem.
         """
