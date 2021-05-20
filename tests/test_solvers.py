@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from auxiliary_classes import PointSubDomain
 from grid_generator import hyper_cube
 from grid_generator import HyperCubeBoundaryMarkers as BoundaryMarkers
 from elastic_problem import LinearElasticProblem
@@ -38,18 +39,23 @@ class TensileTest(LinearElasticProblem):
     def set_boundary_conditions(self):
         # boundary conditions
         self._bcs = []
+        BCType = DisplacementBCType
         if self._bc_type == "floating":
-            self._bcs.append((DisplacementBCType.fixed_component, BoundaryMarkers.left.value, 0, None))
-            self._bcs.append((DisplacementBCType.fixed_component, BoundaryMarkers.bottom.value, 1, None))
-            self._bcs.append((DisplacementBCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
+            self._bcs.append((BCType.fixed_component, BoundaryMarkers.left.value, 0, None))
+            self._bcs.append((BCType.fixed_component, BoundaryMarkers.bottom.value, 1, None))
+            self._bcs.append((BCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
         elif self._bc_type == "clamped":
-            self._bcs.append((DisplacementBCType.fixed, BoundaryMarkers.left.value, None))
-            self._bcs.append((DisplacementBCType.constant, BoundaryMarkers.right.value, (0.1, 0.0)))
+            self._bcs.append((BCType.fixed, BoundaryMarkers.left.value, None))
+            self._bcs.append((BCType.constant, BoundaryMarkers.right.value, (0.1, 0.0)))
         elif self._bc_type == "clamped_free":
-            self._bcs.append((DisplacementBCType.fixed, BoundaryMarkers.left.value, None))
-            self._bcs.append((DisplacementBCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
+            self._bcs.append((BCType.fixed, BoundaryMarkers.left.value, None))
+            self._bcs.append((BCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
         elif self._bc_type == "pointwise":
-            raise NotImplementedError()
+            gamma01 = PointSubDomain((0.0, ) * self._space_dim, tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[0], 0.0)")
+            self._bcs.append((BCType.fixed_pointwise, gamma01, None))
+            self._bcs.append((BCType.fixed_component_pointwise, gamma02, 0, None))
+            self._bcs.append((BCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
 
     def postprocess_solution(self):
         # compute stresses
@@ -201,7 +207,7 @@ class BCFunctionTest(LinearElasticProblem):
 
 
 def test_tensile_test():
-    for bc_type in ("floating", "clamped", "clamped_free"):
+    for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
         tensile_test = TensileTest(25, bc_type=bc_type)
         tensile_test .solve_problem()
 

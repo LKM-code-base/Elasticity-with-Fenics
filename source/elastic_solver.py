@@ -76,9 +76,12 @@ class LinearElasticitySolver():
         assert isinstance(bc[0], (DisplacementBCType, TractionBCType))
         rank = 1
         # 2. check boundary id
-        assert isinstance(bc[1], int)
-        assert bc[1] in all_bndry_ids, "Boundary id {0} ".format(bc[1]) +\
-                                       "was not found in the boundary markers."
+        if bc[0] not in (DisplacementBCType.fixed_component_pointwise, DisplacementBCType.fixed_pointwise):
+            assert isinstance(bc[1], int)
+            assert bc[1] in all_bndry_ids, "Boundary id {0} ".format(bc[1]) +\
+                                           "was not found in the boundary markers."
+        else:
+            assert isinstance(bc[1], dlfn.SubDomain)
         # 3. check value type
         # distinguish between scalar and vector field
         if rank == 0:
@@ -158,15 +161,15 @@ class LinearElasticitySolver():
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.fixed_pointwise:
+                assert isinstance(bndry_id, dlfn.SubDomain)
                 bc_object = dlfn.DirichletBC(self._Vh, self._null_vector,
-                                             self._boundary_markers, bndry_id,
-                                             "pointwise")
+                                             bndry_id, "pointwise")
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.fixed_component_pointwise:
+                assert isinstance(bndry_id, dlfn.SubDomain)
                 bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
-                                             self._null_scalar,
-                                             self._boundary_markers, bndry_id,
+                                             self._null_scalar, bndry_id,
                                              "pointwise")
                 self._dirichlet_bcs.append(bc_object)
 
@@ -200,7 +203,6 @@ class LinearElasticitySolver():
 
             else:  # pragma: no cover
                 raise RuntimeError()
-
             # HINT: traction boundary conditions are covered in _setup_problem
 
     def _setup_problem(self):
