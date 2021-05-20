@@ -37,11 +37,13 @@ class LinearElasticitySolver():
     _field_association = {value: key for key, value in _sub_space_association.items()}
     _null_scalar = dlfn.Constant(0.)
 
-    def __init__(self, mesh, boundary_markers):
+    def __init__(self, mesh, boundary_markers, polynomial_degree=1):
         # input check
         assert isinstance(mesh, dlfn.Mesh)
         assert isinstance(boundary_markers, (dlfn.cpp.mesh.MeshFunctionSizet,
                                              dlfn.cpp.mesh.MeshFunctionInt))
+        assert isinstance(polynomial_degree, int)
+        assert polynomial_degree > 0
         # set mesh variables
         self._mesh = mesh
         self._boundary_markers = boundary_markers
@@ -54,9 +56,9 @@ class LinearElasticitySolver():
 
         # set discretization parameters
         # polynomial degree
-        self._p_deg = 1
+        self._p_deg = polynomial_degree
         # quadrature degree
-        q_deg = self._p_deg + 2
+        q_deg = 2 * self._p_deg
         dlfn.parameters["form_compiler"]["quadrature_degree"] = q_deg
 
     def _check_boundary_condition_format(self, bc):
