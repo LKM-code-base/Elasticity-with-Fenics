@@ -420,7 +420,7 @@ class LinearElasticitySolver():
 
 class NonlinearElasticitySolver():
     """
-    Class to simulate linear elasticity.
+    Class to simulate nonlinear elasticity.
     """
     # class variables
     _sub_space_association = {0: "displacement"}
@@ -597,7 +597,7 @@ class NonlinearElasticitySolver():
 
     def _setup_problem(self):
         """
-        Method setting up non-linear solver objects of the stationary problem.
+        Method setting up nonlinear solver objects of the stationary problem.
         """
         assert hasattr(self, "_mesh")
         assert hasattr(self, "_boundary_markers")
@@ -615,12 +615,14 @@ class NonlinearElasticitySolver():
         # volume element
         dV = dlfn.Measure("dx", domain=self._mesh)
         dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
+        
+        # Normal vetor on boundary 
         N  = dlfn.FacetNormal(self._mesh)
 
         # dimensionless parameters
         C = self._C 
         
-        
+        # identity tensor
         I = dlfn.Identity(self._space_dim)
         # deformation gradient
         F = I + grad(u)
@@ -629,20 +631,18 @@ class NonlinearElasticitySolver():
         # volume ratio
         J = dlfn.det(F)
        
-        
         # weak forms
        
         # strain 
         strain =  dlfn.Constant(0.5) *(CG - I)
-        # dE, see Holzapfel, p. 375, (8.13)
+
+        #for  dstrain, see Holzapfel, p. 375, (8.14)
         dstrain = dlfn.Constant(0.5)*(F.T * grad(v) + grad(v).T*F)
         
-        # virtual work of internal forces
+        # virtual work of internal forces, see Holzapfel, p. 386, (8.46)
         S = C * dlfn.tr(strain) * I + dlfn.Constant(2.0) * strain
         dw_int = inner(S,dstrain) * dV
-        
-        #energy = (C * dlfn.tr(strain)**2 + inner(strain,strain)) *dV
-        #dw_int = dlfn.derivative(energy,u,v)
+
         # virtual work of external forces
         dw_ext = dlfn.dot(self._null_vector, v) * dV
 
@@ -654,7 +654,7 @@ class NonlinearElasticitySolver():
         
         # scaling factor for the scaling of the tracion vectors
         def scaling_factor(bndry_id):
-            return dlfn.sqrt(dot(cofac(F),N(bndry_id)))
+            return dlfn.sqrt(dlfn.dot(cofac(F)*N(bndry_id),cofac(F)*N(bndry_id)))
 
         # add boundary tractions
         if hasattr(self, "_traction_bcs"):

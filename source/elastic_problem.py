@@ -178,6 +178,9 @@ class LinearElasticProblem(ProblemBase):
         """
         super().__init__(main_dir)
 
+        # create path to subdirectory of results for linear problems 
+        self._results_dir = path.join(self._results_dir, "linear")
+        
         # input check
         assert isinstance(maxiter, int) and maxiter > 0
         assert isinstance(tol, float) and tol > 0.0
@@ -381,6 +384,9 @@ class NonlinearElasticProblem(ProblemBase):
         """
         super().__init__(main_dir)
 
+        # create path to subdirectory of results for nonlinear problems 
+        self._results_dir = path.join(self._results_dir, "nonlinear")
+
         # input check
         assert isinstance(maxiter, int) and maxiter > 0
         assert isinstance(tol, float) and tol > 0.0
@@ -445,8 +451,8 @@ class NonlinearElasticProblem(ProblemBase):
         return path.join(self._results_dir, fname)
 
     def _get_solver(self):
-        assert hasattr(self, "_linear_elastic_solver")
-        return self._linear_elastic_solver
+        assert hasattr(self, "_nonlinear_elastic_solver")
+        return self._nonlinear_elastic_solver
 
     def set_parameters(self, **kwargs):
         """
@@ -541,23 +547,23 @@ class NonlinearElasticProblem(ProblemBase):
             self.set_parameters()
 
         # create solver object
-        if not hasattr(self, "_linear_elastic_solver"):
-            self._linear_elastic_solver = \
+        if not hasattr(self, "_nonlinear_elastic_solver"):
+            self._nonlinear_elastic_solver = \
                 NonlinearElasticitySolver(self._mesh, self._boundary_markers)
 
         # pass boundary conditions
-        self._linear_elastic_solver.set_boundary_conditions(self._bcs)
+        self._nonlinear_elastic_solver.set_boundary_conditions(self._bcs)
 
         # pass dimensionless numbers
         if hasattr(self, "_D"):
-            self._linear_elastic_solver.set_dimensionless_numbers(self._C,
+            self._nonlinear_elastic_solver.set_dimensionless_numbers(self._C,
                                                                   self._D)
         else:
-            self._linear_elastic_solver.set_dimensionless_numbers(self._C)
+            self._nonlinear_elastic_solver.set_dimensionless_numbers(self._C)
 
         # pass body force
         if hasattr(self, "_body_force"):
-            self._linear_elastic_solver.set_body_force(self._body_force)
+            self._nonlinear_elastic_solver.set_body_force(self._body_force)
 
         # solve problem
         if self._D is not None:
@@ -565,7 +571,7 @@ class NonlinearElasticProblem(ProblemBase):
                       "D = {1:0.2f}".format(self._C, self._D))
         else:
             dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
-        self._linear_elastic_solver.solve()
+        self._nonlinear_elastic_solver.solve()
 
         # postprocess solution
         self.postprocess_solution()
