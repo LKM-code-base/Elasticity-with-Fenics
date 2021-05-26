@@ -161,13 +161,15 @@ class ProblemBase:
         return self._space_dim
 
 
-class LinearElasticProblem(ProblemBase):
+class CompressibleElasticProblem(ProblemBase):
     """
-    Class to simulate a linear elastic problem using the
-    `LinearElasticitySolver`.
+    Class to simulate a compressible elastic problem using the
+    `CompressibleElasticitySolver`.
 
     Parameters
     ----------
+    elastic_law: ElasticLaw
+        Underlying elastic law.
     main_dir: str (optional)
         Directory to save the results.
     tol: float (optional)
@@ -228,10 +230,6 @@ class LinearElasticProblem(ProblemBase):
         fname += self._suffix
 
         return path.join(self._results_dir, fname)
-
-    def _get_solver(self):
-        assert hasattr(self, "_linear_elastic_solver")
-        return self._linear_elastic_solver
 
     def set_parameters(self, **kwargs):
         """
@@ -304,6 +302,33 @@ class LinearElasticProblem(ProblemBase):
         fname = path.join(self._results_dir, fname)
 
         dlfn.File(fname) << self._boundary_markers
+
+        
+class LinearElasticProblem(CompressibleElasticProblem):
+    """
+    Class to simulate a linear elastic problem using the
+    `LinearElasticitySolver`.
+
+    Parameters
+    ----------
+    elastic_law: ElasticLaw
+        Underlying linear elastic law.
+    main_dir: str (optional)
+        Directory to save the results.
+    tol: float (optional)
+        Final tolerance.
+    maxiter: int (optional)
+        Maximum number of iterations in total.
+    """
+    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
+        """
+        Constructor of the class.
+        """
+        super().__init__(elastic_law, main_dir=None, tol=1e-10, maxiter=50)
+
+    def _get_solver(self):
+        assert hasattr(self, "_linear_elastic_solver")
+        return self._linear_elastic_solver
 
     def solve_problem(self):
         """
@@ -358,13 +383,16 @@ class LinearElasticProblem(ProblemBase):
         # write XDMF-files
         self._write_xdmf_file()
 
-class NonlinearElasticProblem(ProblemBase):
+
+class NonlinearElasticProblem(CompressibleElasticProblem):
     """
     Class to simulate a nonlinear elastic problem using the
     `NonlinearElasticitySolver`.
 
     Parameters
     ----------
+    elastic_law: ElasticLaw
+        Underlying linear elastic law.
     main_dir: str (optional)
         Directory to save the results.
     tol: float (optional)
@@ -376,131 +404,11 @@ class NonlinearElasticProblem(ProblemBase):
         """
         Constructor of the class.
         """
-        super().__init__(elastic_law, main_dir)
-
-        # input check
-        assert isinstance(maxiter, int) and maxiter > 0
-        assert isinstance(tol, float) and tol > 0.0
-
-        # set numerical tolerances
-        self._tol = tol
-        self._maxiter = maxiter
-
-    def _compute_stress_tensor(self):
-        """
-        Returns the stress tensor.
-        """
-        assert hasattr(self, "_C")
-        solver = self._get_solver()
-        # displacement vector
-        displacement = solver.solution
-       
-        stress = self._elastic_law.postprocess_cauchy_stress(displacement)
-        # create function space
-        family = displacement.ufl_element().family()
-        assert family == "Lagrange"
-        degree = displacement.ufl_element().degree()
-        assert degree >= 0
-        cell = self._mesh.ufl_cell()
-        elemSigma = dlfn.TensorElement("DG", cell, degree - 1,
-                                       shape=(self._space_dim, self._space_dim),
-                                       symmetry=True)
-        Wh = dlfn.FunctionSpace(self._mesh, elemSigma)
-
-        # project
-        sigma = dlfn.project(stress, Wh)
-        sigma.rename("sigma", "")
-
-        return sigma
-
-    def _get_filename(self):
-        """
-        Class method returning a filename.
-        """
-        # input check
-        assert hasattr(self, "_problem_name")
-        problem_name = self._problem_name
-
-        fname = problem_name
-        fname += self._suffix
-
-        return path.join(self._results_dir, fname)
+        super().__init__(elastic_law, main_dir=None, tol=1e-10, maxiter=50)
 
     def _get_solver(self):
         assert hasattr(self, "_nonlinear_elastic_solver")
         return self._nonlinear_elastic_solver
-
-    def set_parameters(self, **kwargs):
-        """
-        Sets up the parameters of the model by creating or modifying class
-        objects.
-        """
-        if "C" in kwargs.keys():
-            # 1st dimensionless coefficient
-            C = kwargs["C"]
-            assert isinstance(C, float)
-            assert isfinite(C)
-            assert C > 0.0
-            self._C = C
-            # 2nd dimensionless coefficient
-            if "D" in kwargs.keys():
-                D = kwargs["D"]
-                assert isinstance(D, float)
-                assert isfinite(D)
-                assert D > 0.0
-                self._D = D
-
-        else:
-            # extract elastic moduli
-            cleaned_kwargs = kwargs.copy()
-            if "lref" in cleaned_kwargs.keys():
-                cleaned_kwargs.pop("lref")
-            if "bref" in cleaned_kwargs.keys():
-                cleaned_kwargs.pop("bref")
-            elastic_moduli = compute_elasticity_coefficients(**cleaned_kwargs)
-            lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
-            mu = elastic_moduli[ElasticModuli.ShearModulus]
-            # 1st dimensionless coefficient
-            self._C = lmbda / mu
-
-            # 2nd optional dimensionless coefficient
-            if "lref" in kwargs.keys() and "bref" in kwargs.keys():
-                # reference length
-                lref = kwargs["lref"]
-                assert isinstance(lref, float)
-                assert isfinite(lref)
-                assert lref > 0.0
-                # reference value for the body force density
-                bref = kwargs["bref"]
-                assert isinstance(bref, float)
-                assert isfinite(bref)
-                assert bref > 0.0
-                # 2nd optional dimensionless coefficient
-                self._D = bref * lref / mu
-
-            else:
-                self._D = None
-
-    def write_boundary_markers(self):
-        """
-        Write the boundary markers specified by the MeshFunction
-        `_boundary_markers` to a pvd-file.
-        """
-        assert hasattr(self, "_boundary_markers")
-        assert hasattr(self, "_problem_name")
-
-        # create results directory
-        assert hasattr(self, "_results_dir")
-        if not path.exists(self._results_dir):
-            os.makedirs(self._results_dir)
-
-        problem_name = self._problem_name
-        suffix = ".pvd"
-        fname = problem_name + "_BoundaryMarkers"
-        fname += suffix
-        fname = path.join(self._results_dir, fname)
-
-        dlfn.File(fname) << self._boundary_markers
 
     def solve_problem(self):
         """

@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 import dolfin as dlfn
 from ufl import cofac
 from dolfin import grad, inner

@@ -437,7 +437,7 @@ class CompressibleElasticitySolver(SolverBase):
         
 class LinearElasticitySolver(CompressibleElasticitySolver):
     """
-    Class to simulate linear elasticity.
+    Class to simulate linear compressible elasticity.
     """
 
     def __init__(self, mesh, boundary_markers, polynomial_degree=1):
@@ -446,7 +446,7 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
     
     def _setup_problem(self):
         """
-        Method setting up non-linear solver objects of the stationary problem.
+        Method setting up linear solver objects of the stationary problem.
         """
         super()._setup_problem()
         
@@ -475,7 +475,7 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
 
 class NonlinearElasticitySolver(CompressibleElasticitySolver):
     """
-    Class to simulate nonlinear elasticity.
+    Class to simulate nonlinear compressible elasticity.
     """
     
     def __init__(self, mesh, boundary_markers, polynomial_degree=1):
