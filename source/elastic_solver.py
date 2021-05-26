@@ -382,6 +382,7 @@ class CompressibleElasticitySolver(SolverBase):
 
         # creating test function
         self._v = dlfn.TestFunction(self._Vh)
+        self._u = dlfn.TrialFunction(self._Vh)
 
         # solution
         self._solution = dlfn.Function(self._Vh)
@@ -400,7 +401,7 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
     """
 
     def __init__(self, mesh, boundary_markers, polynomial_degree=1):
-        # call solver of base class
+        # call constructor of base class
         super().__init__(mesh, boundary_markers, polynomial_degree)
     
     def _setup_problem(self):
@@ -415,7 +416,7 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
         
         # weak forms
         # virtual work of internal forces
-        strain = sym_grad(self._solution)
+        strain = sym_grad(self._u)
         dstrain = sym_grad(self._v)
         dw_int = (self._C * dlfn.tr(strain) * dlfn.tr(dstrain)
                   + inner(dlfn.Constant(2.0) * strain, dstrain)
@@ -458,17 +459,21 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
                     dw_ext += traction * self._v[component_index] * self._dA(bndry_id)
 
         # linear variational problem
+        print(self._dirichlet_bcs)
         self._linear_problem = dlfn.LinearVariationalProblem(dw_int, dw_ext,
                                                              self._solution,
                                                              self._dirichlet_bcs)
         # setup linear variational solver
         self._linear_solver = dlfn.LinearVariationalSolver(self._linear_problem)
 
+
     def solve(self):
         """
         Solves the linear problem.
         """
+        
         # setup problem
+
         if not all(hasattr(self, attr) for attr in ("_linear_solver",
                                                     "_linear_problem",
                                                     "_solution")):
