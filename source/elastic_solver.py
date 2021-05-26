@@ -4,7 +4,6 @@ from math import isfinite
 from enum import Enum, auto
 
 import dolfin as dlfn
-from ufl import cofac
 from dolfin import grad, div, dot, inner
 
 from auxiliary_methods import extract_all_boundary_markers
@@ -124,7 +123,8 @@ class SolverBase:
     @property
     def solution(self):
         return self._solution
-    
+
+
 class CompressibleElasticitySolver(SolverBase):
     """
     Base class for compressible elasticity.
@@ -134,8 +134,9 @@ class CompressibleElasticitySolver(SolverBase):
     _field_association = {value: key for key, value in _sub_space_association.items()}
     _null_scalar = dlfn.Constant(0.)
     
-    def __init__(self, mesh, boundary_markers, polynomial_degree=1):
+    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
         super().__init__(mesh, boundary_markers, polynomial_degree)
+        self._elastic_law = elastic_law
         
     def _check_boundary_condition_format(self, bc):
         """
@@ -391,9 +392,48 @@ class CompressibleElasticitySolver(SolverBase):
         self._dV = dlfn.Measure("dx", domain=self._mesh)
         self._dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
         
-        # Normal vetor on boundary 
-        self._N  = dlfn.FacetNormal(self._mesh)
+        # setup the parameters for the elastic law
+        self._elastic_law.set_parameters(self._mesh, self._C, self._u, self._v, self._solution)
         
+        # virtual work
+        self._dw_int = self._elastic_law.dw_int()
+
+        # virtual work of external forces
+        self._dw_ext = dlfn.dot(self._null_vector, self._v) * self._dV
+
+        # add body force term
+        if hasattr(self, "_body_force"):
+            assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
+                                        "the body forces is not specified."
+            self._dw_ext += self._D * self._elastic_law.volume_scaling() * dot(self._body_force, self._v) * self._dV
+
+        # add boundary tractions
+        if hasattr(self, "_traction_bcs"):
+            for bc in self._traction_bcs:
+                # unpack values
+                if len(bc) == 3:
+                    bc_type, bndry_id, traction = bc
+                elif len(bc) == 4:
+                    bc_type, bndry_id, component_index, traction = bc
+
+                if bc_type is TractionBCType.constant:
+                    assert isinstance(traction, (tuple, list))
+                    const_function = dlfn.Constant(traction)
+                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * dot(const_function, self._v) * self._dA(bndry_id)
+
+                elif bc_type is TractionBCType.constant_component:
+                    assert isinstance(traction, float)
+                    const_function = dlfn.Constant(traction)
+                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * const_function * self._v[component_index] * self._dA(bndry_id)
+
+                elif bc_type is TractionBCType.function:
+                    assert isinstance(traction, dlfn.Expression)
+                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * dot(traction, self._v) * self._dA(bndry_id)
+
+                elif bc_type is TractionBCType.function_component:
+                    assert isinstance(traction, dlfn.Expression)
+                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * traction * self._v[component_index] * self._dA(bndry_id)
+
         
 class LinearElasticitySolver(CompressibleElasticitySolver):
     """
@@ -410,62 +450,12 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
         """
         super()._setup_problem()
         
-        # auxiliary function
-        def sym_grad(u):
-            return dlfn.Constant(0.5) * (grad(u) + grad(u).T)
-        
-        # weak forms
-        # virtual work of internal forces
-        strain = sym_grad(self._u)
-        dstrain = sym_grad(self._v)
-        dw_int = (self._C * dlfn.tr(strain) * dlfn.tr(dstrain)
-                  + inner(dlfn.Constant(2.0) * strain, dstrain)
-                  ) * self._dV
-
-        # virtual work of external forces
-        dw_ext = dlfn.dot(self._null_vector, self._v) * self._dV
-
-        # add body force term
-        if hasattr(self, "_body_force"):
-            assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
-                                        "the body forces is not specified."
-            dw_ext += self._D * dot(self._body_force, self._v) * self._dV
-
-        # add boundary tractions
-        if hasattr(self, "_traction_bcs"):
-            for bc in self._traction_bcs:
-                # unpack values
-                if len(bc) == 3:
-                    bc_type, bndry_id, traction = bc
-                elif len(bc) == 4:
-                    bc_type, bndry_id, component_index, traction = bc
-
-                if bc_type is TractionBCType.constant:
-                    assert isinstance(traction, (tuple, list))
-                    const_function = dlfn.Constant(traction)
-                    dw_ext += dot(const_function, self._v) * self._dA(bndry_id)
-
-                elif bc_type is TractionBCType.constant_component:
-                    assert isinstance(traction, float)
-                    const_function = dlfn.Constant(traction)
-                    dw_ext += const_function * self._v[component_index] * self._dA(bndry_id)
-
-                elif bc_type is TractionBCType.function:
-                    assert isinstance(traction, dlfn.Expression)
-                    dw_ext += dot(traction, self._v) * self._dA(bndry_id)
-
-                elif bc_type is TractionBCType.function_component:
-                    assert isinstance(traction, dlfn.Expression)
-                    dw_ext += traction * self._v[component_index] * self._dA(bndry_id)
-
         # linear variational problem
-        print(self._dirichlet_bcs)
-        self._linear_problem = dlfn.LinearVariationalProblem(dw_int, dw_ext,
+        self._linear_problem = dlfn.LinearVariationalProblem(self._dw_int, self._dw_ext,
                                                              self._solution,
                                                              self._dirichlet_bcs)
         # setup linear variational solver
         self._linear_solver = dlfn.LinearVariationalSolver(self._linear_problem)
-
 
     def solve(self):
         """
@@ -497,74 +487,14 @@ class NonlinearElasticitySolver(CompressibleElasticitySolver):
         Method setting up nonlinear solver objects of the stationary problem.
         """
         super()._setup_problem()
-
-        # identity tensor
-        I = dlfn.Identity(self._space_dim)
-        # deformation gradient
-        F = I + grad(self._solution)
-        # right Cauchy-Green tensor
-        CG = F.T * F
-        # volume ratio
-        J = dlfn.det(F)
        
-        # strain 
-        strain =  dlfn.Constant(0.5) * (CG - I)
-        
-        # virtual work of internal forces, see Holzapfel, p. 386, (8.46)
-        # for dstrain, see Holzapfel, p. 375, (8.14)
-        dstrain = dlfn.Constant(0.5) * (F.T * grad(self._v) + grad(self._v).T * F)
-        # second Piola-Kirchhoff stress
-        S = self._C * dlfn.tr(strain) * I + dlfn.Constant(2.0) * strain
-        # virtual work
-        dw_int = inner(S, dstrain) * self._dV
-
-        # virtual work of external forces
-        dw_ext = dlfn.dot(self._null_vector, self._v) * self._dV
-
-        # add body force term
-        if hasattr(self, "_body_force"):
-            assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
-                                        "the body forces is not specified."
-            dw_ext += self._D * J * dot(self._body_force, self._v) * self._dV
-        
-        # scaling factor for the scaling of the tracion vectors
-        def scaling_factor(bndry_id):
-            return dlfn.sqrt(dlfn.dot(cofac(F) * self._N(bndry_id), cofac(F) * self._N(bndry_id)))
-
-        # add boundary tractions
-        if hasattr(self, "_traction_bcs"):
-            for bc in self._traction_bcs:
-                # unpack values
-                if len(bc) == 3:
-                    bc_type, bndry_id, traction = bc
-                elif len(bc) == 4:
-                    bc_type, bndry_id, component_index, traction = bc
-
-                if bc_type is TractionBCType.constant:
-                    assert isinstance(traction, (tuple, list))
-                    const_function = dlfn.Constant(traction)
-                    dw_ext += scaling_factor(bndry_id) * dot(const_function, self._v) * self._dA(bndry_id)
-
-                elif bc_type is TractionBCType.constant_component:
-                    assert isinstance(traction, float)
-                    const_function = dlfn.Constant(traction)
-                    dw_ext += scaling_factor(bndry_id) * const_function * self._v[component_index] * self._dA(bndry_id)
-
-                elif bc_type is TractionBCType.function:
-                    assert isinstance(traction, dlfn.Expression)
-                    dw_ext += scaling_factor(bndry_id) * dot(traction, self._v) * self._dA(bndry_id)
-
-                elif bc_type is TractionBCType.function_component:
-                    assert isinstance(traction, dlfn.Expression)
-                    dw_ext += scaling_factor(bndry_id) * traction * self._v[component_index] * self._dA(bndry_id)
-
         # nonlinear variational problem
-        Form = dw_int - dw_ext
-        J_newton = dlfn.derivative(Form, self._solution)
-        self._nonlinear_problem = dlfn.NonlinearVariationalProblem(Form,
+        self._Form = self._dw_int - self._dw_ext
+        self._J_newton = dlfn.derivative(self._Form, self._solution)
+        self._nonlinear_problem = dlfn.NonlinearVariationalProblem(self._Form,
                                                              self._solution,
                                                              self._dirichlet_bcs,
-                                                             J = J_newton)
+                                                             J = self._J_newton)
         # setup linear variational solver
         self._nonlinear_solver = dlfn.NonlinearVariationalSolver(self._nonlinear_problem)
 

@@ -12,7 +12,10 @@ from elastic_solver import LinearElasticitySolver, NonlinearElasticitySolver
 class ProblemBase:
     _suffix = ".xdmf"
 
-    def __init__(self, main_dir=None):
+    def __init__(self, elastic_law, main_dir=None):
+        
+        self._elastic_law = elastic_law
+        
         # set write and read directory
         if main_dir is None:
             self._main_dir = os.getcwd()
@@ -20,7 +23,7 @@ class ProblemBase:
             assert isinstance(main_dir, str)
             assert path.exist(main_dir)
             self._main_dir = main_dir
-        self._results_dir = path.join(self._main_dir, "results")
+        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law._linearity_type}/{self._elastic_law._name}")
 
     def _add_to_field_output(self, field):
         """
@@ -172,15 +175,12 @@ class LinearElasticProblem(ProblemBase):
     maxiter: int (optional)
         Maximum number of iterations in total.
     """
-    def __init__(self, main_dir=None, tol=1e-10, maxiter=50):
+    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
         """
         Constructor of the class.
         """
-        super().__init__(main_dir)
+        super().__init__(elastic_law, main_dir)
 
-        # create path to subdirectory of results for linear problems 
-        self._results_dir = path.join(self._results_dir, "linear")
-        
         # input check
         assert isinstance(maxiter, int) and maxiter > 0
         assert isinstance(tol, float) and tol > 0.0
@@ -197,14 +197,8 @@ class LinearElasticProblem(ProblemBase):
         solver = self._get_solver()
         # displacement vector
         displacement = solver.solution
-        displacement_gradient = dlfn.grad(displacement)
-        # strain tensor (symbolic)
-        strain = dlfn.Constant(0.5) * (displacement_gradient + displacement_gradient.T)
-        identity = dlfn.Identity(self._space_dim)
-        # dimensionless stress tensor (symbolic)
-        stress = dlfn.Constant(self._C) * dlfn.inner(identity, strain) * identity
-        stress += dlfn.Constant(2.0) * strain
-
+       
+        stress = self._elastic_law.postprocess_cauchy_stress(displacement)
         # create function space
         family = displacement.ufl_element().family()
         assert family == "Lagrange"
@@ -334,7 +328,7 @@ class LinearElasticProblem(ProblemBase):
         # create solver object
         if not hasattr(self, "_linear_elastic_solver"):
             self._linear_elastic_solver = \
-                LinearElasticitySolver(self._mesh, self._boundary_markers)
+                LinearElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
 
         # pass boundary conditions
         self._linear_elastic_solver.set_boundary_conditions(self._bcs)
@@ -378,14 +372,11 @@ class NonlinearElasticProblem(ProblemBase):
     maxiter: int (optional)
         Maximum number of iterations in total.
     """
-    def __init__(self, main_dir=None, tol=1e-10, maxiter=50):
+    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
         """
         Constructor of the class.
         """
-        super().__init__(main_dir)
-
-        # create path to subdirectory of results for nonlinear problems 
-        self._results_dir = path.join(self._results_dir, "nonlinear")
+        super().__init__(elastic_law, main_dir)
 
         # input check
         assert isinstance(maxiter, int) and maxiter > 0
@@ -403,23 +394,8 @@ class NonlinearElasticProblem(ProblemBase):
         solver = self._get_solver()
         # displacement vector
         displacement = solver.solution
-        displacement_gradient = dlfn.grad(displacement)
-        
-        # strain tensor (symbolic)
-        identity = dlfn.Identity(self._space_dim)
-        deformation_gradient = identity + displacement_gradient
-        right_cauchy_green_tensor = deformation_gradient.T * deformation_gradient
-        volume_ratio = dlfn.det(deformation_gradient)
-
-        strain = dlfn.Constant(0.5) * (right_cauchy_green_tensor - identity)
-        #strain = dlfn.sym(displacement_gradient)
-        # dimensionless 2. PK stress tensor (symbolic)
-        S = dlfn.Constant(self._C) * dlfn.inner(identity, strain) * identity
-        S += dlfn.Constant(2.0) * strain
-
-        # dimensionless stress tensor (symbolic) 
-        stress = (deformation_gradient * S * deformation_gradient.T) / volume_ratio
-        #stress = S
+       
+        stress = self._elastic_law.postprocess_cauchy_stress(displacement)
         # create function space
         family = displacement.ufl_element().family()
         assert family == "Lagrange"
@@ -549,7 +525,7 @@ class NonlinearElasticProblem(ProblemBase):
         # create solver object
         if not hasattr(self, "_nonlinear_elastic_solver"):
             self._nonlinear_elastic_solver = \
-                NonlinearElasticitySolver(self._mesh, self._boundary_markers)
+                NonlinearElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
 
         # pass boundary conditions
         self._nonlinear_elastic_solver.set_boundary_conditions(self._bcs)

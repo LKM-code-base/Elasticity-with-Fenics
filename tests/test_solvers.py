@@ -6,12 +6,13 @@ from grid_generator import HyperCubeBoundaryMarkers as BoundaryMarkers
 from elastic_problem import LinearElasticProblem, NonlinearElasticProblem
 from elastic_solver import DisplacementBCType
 from elastic_solver import TractionBCType
+from elastic_law import Hooke, StVenantKirchhoff
 import dolfin as dlfn
 
 
 class TensileTest(LinearElasticProblem):
-    def __init__(self, n_points, main_dir=None, bc_type="floating"):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
+        super().__init__(elastic_law, main_dir)
         
         assert isinstance(n_points, int)
         assert n_points > 0
@@ -79,8 +80,8 @@ class TensileTest(LinearElasticProblem):
 
 
 class ShearTest(LinearElasticProblem):
-    def __init__(self, n_points, main_dir=None, bc_type="displacement"):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None, bc_type="displacement"):
+        super().__init__(elastic_law, main_dir)
 
         assert isinstance(n_points, int)
         assert n_points > 0
@@ -135,8 +136,8 @@ class ShearTest(LinearElasticProblem):
 
 
 class BodyForceTest(LinearElasticProblem):
-    def __init__(self, n_points, main_dir=None):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None):
+        super().__init__(elastic_law, main_dir)
 
         self._n_points = n_points
         self._problem_name = "BodyForceTest"
@@ -173,8 +174,8 @@ class BodyForceTest(LinearElasticProblem):
 
 
 class BCFunctionTest(LinearElasticProblem):
-    def __init__(self, n_points, main_dir=None):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None):
+        super().__init__(elastic_law, main_dir)
 
         self._n_points = n_points
         self._problem_name = "BCFunctionTest"
@@ -208,7 +209,7 @@ class BCFunctionTest(LinearElasticProblem):
 
 def test_tensile_test():
     for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
-        tensile_test = TensileTest(25, bc_type=bc_type)
+        tensile_test = TensileTest(25, Hooke(), bc_type=bc_type)
         print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
         tensile_test .solve_problem()
         print()
@@ -216,28 +217,28 @@ def test_tensile_test():
 
 def test_shear_test():
     for bc_type in ("displacement", "traction"):
-        shear_test = ShearTest(25, bc_type=bc_type)
+        shear_test = ShearTest(25, Hooke(), bc_type=bc_type)
         print(f"Running {shear_test._problem_name} with {bc_type} boundary condition type.")
         shear_test.solve_problem()
         print()
 
 def test_body_force():
-    body_force_test = BodyForceTest(25)
+    body_force_test = BodyForceTest(25, Hooke())
     print(f"Running {body_force_test._problem_name}.")
     body_force_test.solve_problem()
     print()
 
 
 def test_bc_function():
-    bc_function_test = BCFunctionTest(25)
+    bc_function_test = BCFunctionTest(25, Hooke())
     print(f"Running {bc_function_test._problem_name}.")
     bc_function_test.solve_problem()
     print()
 
 
 class NonlinearTensileTest(NonlinearElasticProblem):
-    def __init__(self, n_points, main_dir=None, bc_type="floating"):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
+        super().__init__(elastic_law, main_dir)
         
         assert isinstance(n_points, int)
         assert n_points > 0
@@ -305,8 +306,8 @@ class NonlinearTensileTest(NonlinearElasticProblem):
 
 
 class NonlinearShearTest(NonlinearElasticProblem):
-    def __init__(self, n_points, main_dir=None, bc_type="displacement"):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None, bc_type="displacement"):
+        super().__init__(elastic_law, main_dir)
 
         assert isinstance(n_points, int)
         assert n_points > 0
@@ -361,8 +362,8 @@ class NonlinearShearTest(NonlinearElasticProblem):
 
 
 class NonlinearBodyForceTest(NonlinearElasticProblem):
-    def __init__(self, n_points, main_dir=None):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None):
+        super().__init__(elastic_law, main_dir)
 
         self._n_points = n_points
         self._problem_name = "NonlinearBodyForceTest"
@@ -399,8 +400,8 @@ class NonlinearBodyForceTest(NonlinearElasticProblem):
 
 
 class NonlinearBCFunctionTest(NonlinearElasticProblem):
-    def __init__(self, n_points, main_dir=None):
-        super().__init__(main_dir)
+    def __init__(self, n_points, elastic_law, main_dir=None):
+        super().__init__(elastic_law, main_dir)
 
         self._n_points = n_points
         self._problem_name = "NonlinearBCFunctionTest"
@@ -434,7 +435,7 @@ class NonlinearBCFunctionTest(NonlinearElasticProblem):
 
 def test_nonlinear_tensile_test():
     for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
-        tensile_test = NonlinearTensileTest(25, bc_type=bc_type)
+        tensile_test = NonlinearTensileTest(25, StVenantKirchhoff(), bc_type=bc_type)
         print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
         tensile_test .solve_problem()
         print()
@@ -442,20 +443,20 @@ def test_nonlinear_tensile_test():
 
 def test_nonlinear_shear_test():
     for bc_type in ("displacement", "traction"):
-        shear_test = NonlinearShearTest(25, bc_type=bc_type)
+        shear_test = NonlinearShearTest(25, StVenantKirchhoff(), bc_type=bc_type)
         print(f"Running {shear_test._problem_name} with {bc_type} boundary condition type.")
         shear_test.solve_problem()
         print()
 
 def test_nonlinear_body_force():
-    body_force_test = NonlinearBodyForceTest(25)
+    body_force_test = NonlinearBodyForceTest(25, StVenantKirchhoff())
     print(f"Running {body_force_test._problem_name}.")
     body_force_test.solve_problem()
     print()
 
 
 def test_nonlinear_bc_function():
-    bc_function_test = NonlinearBCFunctionTest(25)
+    bc_function_test = NonlinearBCFunctionTest(25, StVenantKirchhoff())
     print(f"Running {bc_function_test._problem_name}.")
     bc_function_test.solve_problem()
     print()
