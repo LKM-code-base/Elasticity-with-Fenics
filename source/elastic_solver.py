@@ -129,11 +129,6 @@ class CompressibleElasticitySolver(SolverBase):
     """
     Base class for compressible elasticity.
     """
-    # class variables
-    _sub_space_association = {0: "displacement"}
-    _field_association = {value: key for key, value in _sub_space_association.items()}
-    _null_scalar = dlfn.Constant(0.)
-    
     def __init__(self, mesh, boundary_markers, polynomial_degree=1):
         super().__init__(mesh, boundary_markers, polynomial_degree)
         
@@ -398,6 +393,10 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
     """
     Class to simulate linear elasticity.
     """
+    # class variables
+    _sub_space_association = {0: "displacement"}
+    _field_association = {value: key for key, value in _sub_space_association.items()}
+    _null_scalar = dlfn.Constant(0.)
 
     def __init__(self, mesh, boundary_markers, polynomial_degree=1):
         # call solver of base class
@@ -482,6 +481,11 @@ class NonlinearElasticitySolver(CompressibleElasticitySolver):
     """
     Class to simulate nonlinear elasticity.
     """
+    # class variables
+    _sub_space_association = {0: "displacement"}
+    _field_association = {value: key for key, value in _sub_space_association.items()}
+    _null_scalar = dlfn.Constant(0.)
+    
     def __init__(self, mesh, boundary_markers, polynomial_degree=1):
         # call constructor of base class
         super().__init__(mesh, boundary_markers, polynomial_degree)
