@@ -7,7 +7,7 @@ import dolfin as dlfn
 from auxiliary_methods import compute_elasticity_coefficients
 from auxiliary_methods import ElasticModuli
 from elastic_solver import LinearElasticitySolver, NonlinearElasticitySolver 
-
+from elastic_law import ElasticLaw
 
 class ProblemBase:
     _suffix = ".xdmf"
@@ -15,6 +15,7 @@ class ProblemBase:
     def __init__(self, elastic_law, main_dir=None):
         
         #set elastic law
+        assert isinstance(elastic_law, ElasticLaw)
         self._elastic_law = elastic_law
         
         # set write and read directory
@@ -24,6 +25,10 @@ class ProblemBase:
             assert isinstance(main_dir, str)
             assert path.exist(main_dir)
             self._main_dir = main_dir
+
+        assert hasattr(elastic_law,"linearity_type")
+        assert hasattr(elastic_law,"name")
+
         self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law.name}")
 
     def _add_to_field_output(self, field):
@@ -198,10 +203,13 @@ class CompressibleElasticProblem(ProblemBase):
         """
         assert hasattr(self, "_C")
         solver = self._get_solver()
+        
         # displacement vector
         displacement = solver.solution
-       
+
+        # compute cauchy stress
         stress = self._elastic_law.postprocess_cauchy_stress(displacement)
+
         # create function space
         family = displacement.ufl_element().family()
         assert family == "Lagrange"

@@ -7,7 +7,7 @@ import dolfin as dlfn
 from dolfin import grad, div, dot, inner
 
 from auxiliary_methods import extract_all_boundary_markers
-
+from elastic_law import ElasticLaw
 
 class DisplacementBCType(Enum):
     fixed = auto()
@@ -49,8 +49,9 @@ class SolverBase:
         self._null_vector = dlfn.Constant((0., ) * self._space_dim)
 
         # set elastic law
+        assert isinstance(elastic_law, ElasticLaw)
         self._elastic_law = elastic_law
-        
+
         # set discretization parameters
         # polynomial degree
         self._p_deg = polynomial_degree
