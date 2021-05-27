@@ -31,7 +31,7 @@ class SolverBase:
     """
     Base class for solvers.
     """
-    def __init__(self, mesh, boundary_markers, polynomial_degree=1):
+    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
         # input check
         assert isinstance(mesh, dlfn.Mesh)
         assert isinstance(boundary_markers, (dlfn.cpp.mesh.MeshFunctionSizet,
@@ -48,6 +48,9 @@ class SolverBase:
         # dimension-dependent variables
         self._null_vector = dlfn.Constant((0., ) * self._space_dim)
 
+        # set elastic law
+        self._elastic_law = elastic_law
+        
         # set discretization parameters
         # polynomial degree
         self._p_deg = polynomial_degree
@@ -135,8 +138,7 @@ class CompressibleElasticitySolver(SolverBase):
     _null_scalar = dlfn.Constant(0.)
     
     def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
-        super().__init__(mesh, boundary_markers, polynomial_degree)
-        self._elastic_law = elastic_law
+        super().__init__(mesh, boundary_markers, elastic_law, polynomial_degree)
         
     def _check_boundary_condition_format(self, bc):
         """
@@ -440,9 +442,9 @@ class LinearElasticitySolver(CompressibleElasticitySolver):
     Class to simulate linear compressible elasticity.
     """
 
-    def __init__(self, mesh, boundary_markers, polynomial_degree=1):
+    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
         # call constructor of base class
-        super().__init__(mesh, boundary_markers, polynomial_degree)
+        super().__init__(mesh, boundary_markers, elastic_law, polynomial_degree)
     
     def _setup_problem(self):
         """
@@ -478,9 +480,9 @@ class NonlinearElasticitySolver(CompressibleElasticitySolver):
     Class to simulate nonlinear compressible elasticity.
     """
     
-    def __init__(self, mesh, boundary_markers, polynomial_degree=1):
+    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
         # call constructor of base class
-        super().__init__(mesh, boundary_markers, polynomial_degree)
+        super().__init__(mesh, boundary_markers, elastic_law, polynomial_degree)
 
     def _setup_problem(self):
         """

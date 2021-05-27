@@ -14,6 +14,7 @@ class ProblemBase:
 
     def __init__(self, elastic_law, main_dir=None):
         
+        #set elastic law
         self._elastic_law = elastic_law
         
         # set write and read directory
@@ -23,7 +24,7 @@ class ProblemBase:
             assert isinstance(main_dir, str)
             assert path.exist(main_dir)
             self._main_dir = main_dir
-        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law._linearity_type}/{self._elastic_law._name}")
+        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law.name}")
 
     def _add_to_field_output(self, field):
         """

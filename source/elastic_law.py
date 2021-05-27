@@ -46,9 +46,9 @@ class ElasticLaw:
 class Hooke(ElasticLaw):
     def __init__(self):
         super().__init__()
-        self._nonlinear = False
-        self._linearity_type = "linear"
-        self._name = "Hooke"
+        self.nonlinear = False
+        self.linearity_type = "linear"
+        self.name = "Hooke"
 
     def set_parameters(self, mesh, C, u, v, solution):
         super().set_parameters(mesh, C, u, v, solution)
@@ -106,9 +106,9 @@ class Hooke(ElasticLaw):
 class StVenantKirchhoff(ElasticLaw):
     def __init__(self):
         super().__init__()
-        self._nonlinear = True
-        self._linearity_type = "nonlinear"
-        self._name = "StVenantKirchhoff"
+        self.nonlinear = True
+        self.linearity_type = "nonlinear"
+        self.name = "StVenantKirchhoff"
         
     def set_parameters(self, mesh, C, u, v, solution):
         super().set_parameters(mesh, C, u, v, solution)
