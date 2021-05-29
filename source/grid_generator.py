@@ -5,7 +5,7 @@ from enum import Enum, auto
 import math
 
 import dolfin as dlfn
-from mshr import Sphere, Circle, generate_mesh
+from mshr import Sphere, Circle, Cylinder, generate_mesh
 
 
 class GeometryType(Enum):
@@ -47,6 +47,13 @@ class HyperSimplexBoundaryMarkers(Enum):
     # only used in 3D
     back = auto()
 
+class CylinderBoundaryMarkers(Enum):
+    """
+    Simple enumeration to identify the boundaries of a cylinder uniquely.
+    """
+    top = auto()
+    bottom = auto()
+    side = auto()
 
 class CircularBoundary(dlfn.SubDomain):
     def __init__(self, **kwargs):
@@ -62,6 +69,18 @@ class CircularBoundary(dlfn.SubDomain):
         result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius) < tol
         return result and on_boundary
 
+class CylinderBoundary(dlfn.SubDomain):
+    def __init__(self, **kwargs):
+        super().__init__()
+        assert(isinstance(kwargs["mesh"], dlfn.Mesh))
+        self._hmin = kwargs["mesh"].hmin()
+        self._radius = kwargs["radius"]
+
+    def inside(self, x, on_boundary):
+        # tolerance: half length of smallest element
+        tol = self._hmin / 2.
+        result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius(x[2])) < tol
+        return result and on_boundary
 
 def spherical_shell(dim, radii, n_refinements=0):
     """
@@ -190,4 +209,49 @@ def hyper_simplex(dim, n_refinements=0):
         gamma01.mark(facet_marker, BoundaryMarkers.left.value)
         gamma02.mark(facet_marker, BoundaryMarkers.bottom.value)
 
+    return mesh, facet_marker
+
+def cylinder(dim, radii, height, n_refinements=0):
+    """
+    Creates the mesh of a cylinder using the mshr module.
+    """
+    assert isinstance(dim, int)
+    assert dim == 3
+
+    assert isinstance(radii, (list, tuple)) and len(radii) == 2
+    rt, rb = radii
+    assert isinstance(rb, float) and rb > 0.
+    assert isinstance(rt, float) and rt > 0.
+
+    assert isinstance(height,float) and height > 0.
+
+    assert isinstance(n_refinements, int) and n_refinements >= 0
+
+    # mesh generation
+    bottom = dlfn.Point(0., 0., 0.)
+    top = dlfn.Point(0., 0., height)
+
+    domain = Cylinder(top, bottom, rt, rb, segments = 100)
+    mesh = generate_mesh(domain, 32)
+
+    # mesh refinement
+    for i in range(n_refinements):
+        mesh = dlfn.refine(mesh)
+
+    # MeshFunction for boundaries ids
+    facet_marker = dlfn.MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
+    facet_marker.set_all(0)
+
+    # calculate radius depending on the x[3] coordinate
+    radius = lambda z: rb + z * (rt - rb)/height
+
+    # mark boundaries
+    BoundaryMarkers = CylinderBoundaryMarkers
+    gamma_side = CylinderBoundary(mesh = mesh, radius = radius)
+    gamma_side.mark(facet_marker, BoundaryMarkers.side.value)
+    gamma_top = dlfn.CompiledSubDomain("near(x[2], height) && on_boundary", height = height)
+    gamma_top.mark(facet_marker, BoundaryMarkers.top.value)
+    gamma_bottom = dlfn.CompiledSubDomain("near(x[2], 0.0) && on_boundary")
+    gamma_bottom.mark(facet_marker, BoundaryMarkers.bottom.value)
+    
     return mesh, facet_marker
