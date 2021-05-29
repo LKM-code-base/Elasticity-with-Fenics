@@ -409,7 +409,7 @@ class CompressibleElasticitySolver(SolverBase):
             assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
                                         "the body forces is not specified."
             self._dw_ext += self._D * self._elastic_law.volume_scaling() * dot(self._body_force, self._v) * self._dV
-
+        
         # add boundary tractions
         if hasattr(self, "_traction_bcs"):
             for bc in self._traction_bcs:
@@ -422,21 +422,21 @@ class CompressibleElasticitySolver(SolverBase):
                 if bc_type is TractionBCType.constant:
                     assert isinstance(traction, (tuple, list))
                     const_function = dlfn.Constant(traction)
-                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * dot(const_function, self._v) * self._dA(bndry_id)
+                    self._dw_ext += self._elastic_law.traction_scaling() * dot(const_function, self._v) * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.constant_component:
                     assert isinstance(traction, float)
                     const_function = dlfn.Constant(traction)
-                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * const_function * self._v[component_index] * self._dA(bndry_id)
+                    self._dw_ext += self._elastic_law.traction_scaling() * const_function * self._v[component_index] * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function:
                     assert isinstance(traction, dlfn.Expression)
-                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * dot(traction, self._v) * self._dA(bndry_id)
+                    self._dw_ext += self._elastic_law.traction_scaling() * dot(traction, self._v) * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function_component:
                     assert isinstance(traction, dlfn.Expression)
-                    self._dw_ext += self._elastic_law.traction_scaling(bndry_id) * traction * self._v[component_index] * self._dA(bndry_id)
-
+                    self._dw_ext += self._elastic_law.traction_scaling() * traction * self._v[component_index] * self._dA(bndry_id)
+        
         
 class LinearElasticitySolver(CompressibleElasticitySolver):
     """

@@ -33,7 +33,7 @@ class ElasticLaw:
     def volume_scaling(self):
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    def traction_scaling(self, bndry_id):
+    def traction_scaling(self):
         raise NotImplementedError("You are calling a purely virtual method.")
 
     def dw_int(self):
@@ -76,7 +76,7 @@ class Hooke(ElasticLaw):
     def volume_scaling(self):
         return dlfn.Constant(1.0)
 
-    def traction_scaling(self, bndry_id):
+    def traction_scaling(self):
         return dlfn.Constant(1.0)
 
     def dw_int(self):
@@ -146,13 +146,14 @@ class StVenantKirchhoff(ElasticLaw):
 
         return self._J
 
-    def traction_scaling(self, bndry_id):
+    def traction_scaling(self):
 
         assert hasattr(self, "_F")
         assert hasattr(self, "_N")
 
-        return dlfn.sqrt(dlfn.dot(cofac(self._F) * self._N(bndry_id),\
-            cofac(self._F) * self._N(bndry_id)))
+        return dlfn.sqrt(dlfn.dot(cofac(self._F) * self._N,\
+            cofac(self._F) * self._N))
+        
 
     def dw_int(self):
 
@@ -224,13 +225,13 @@ class NeoHooke(ElasticLaw):
 
         return self._J
 
-    def traction_scaling(self, bndry_id):
+    def traction_scaling(self):
 
         assert hasattr(self, "_F")
         assert hasattr(self, "_N")
 
-        return dlfn.sqrt(dlfn.dot(cofac(self._F) * self._N(bndry_id),\
-            cofac(self._F) * self._N(bndry_id)))
+        return dlfn.sqrt(dlfn.dot(cofac(self._F) * self._N,\
+            cofac(self._F) * self._N))
 
     def dw_int(self):
 
