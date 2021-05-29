@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from matplotlib import interactive
 from grid_generator import hyper_cube
 from grid_generator import spherical_shell
 from grid_generator import hyper_simplex
