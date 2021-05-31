@@ -11,15 +11,15 @@ def test_hyper_cube():
     _, _ = hyper_cube(2, 8)
     # three-dimensional case
     _, _ = hyper_cube(3, 8)
-    
+
 
 def test_hyper_rectangle():
     # two-dimensional case
     _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0), 10)
     _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0), (50, 5))
     # three-dimensional case
-    _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0, 2.0), 8)
-    _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0, 2.0), (50, 5, 10))
+    _, _ = hyper_rectangle((0.0, 0.0, 0.0), (10.0, 1.0, 2.0), 8)
+    _, _ = hyper_rectangle((0.0, 0.0, 0.0), (10.0, 1.0, 2.0), (50, 5, 10))
 
 
 def test_spherical_shell():

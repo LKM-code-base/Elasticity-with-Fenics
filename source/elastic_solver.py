@@ -4,7 +4,7 @@ from math import isfinite
 from enum import Enum, auto
 
 import dolfin as dlfn
-from dolfin import grad, div, dot, inner
+from dolfin import grad, dot, inner
 
 from auxiliary_methods import extract_all_boundary_markers
 
@@ -228,11 +228,11 @@ class LinearElasticitySolver():
 
         # dimensionless parameters
         C = self._C
-        
+
         # auxiliary function
         def sym_grad(u):
             return dlfn.Constant(0.5) * (grad(u) + grad(u).T)
-        
+
         # weak forms
         # virtual work of internal forces
         strain = sym_grad(u)
@@ -262,7 +262,7 @@ class LinearElasticitySolver():
                 if bc_type is TractionBCType.constant:
                     assert isinstance(traction, (tuple, list))
                     const_function = dlfn.Constant(traction)
-                    dw_ext += dot(const_function , v) * dA(bndry_id)
+                    dw_ext += dot(const_function, v) * dA(bndry_id)
 
                 elif bc_type is TractionBCType.constant_component:
                     assert isinstance(traction, float)

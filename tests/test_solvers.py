@@ -12,11 +12,11 @@ import dolfin as dlfn
 class TensileTest(LinearElasticProblem):
     def __init__(self, n_points, main_dir=None, bc_type="floating"):
         super().__init__(main_dir)
-        
+
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
-        
+
         assert isinstance(bc_type, str)
         assert bc_type in ("floating", "clamped", "clamped_free", "pointwise")
         self._bc_type = bc_type
@@ -74,7 +74,7 @@ class TensileTest(LinearElasticProblem):
         print("Volume-averaged stresses: ")
         for i in range(self.space_dim):
             for j in range(self.space_dim):
-                avg_stress = dlfn.assemble(stress_tensor[i,j] * dV) / V
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
@@ -85,7 +85,7 @@ class ShearTest(LinearElasticProblem):
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
-        
+
         assert isinstance(bc_type, str)
         assert bc_type in ("displacement", "traction")
         self._bc_type = bc_type
@@ -130,7 +130,7 @@ class ShearTest(LinearElasticProblem):
         print("Volume-averaged stresses: ")
         for i in range(self.space_dim):
             for j in range(self.space_dim):
-                avg_stress = dlfn.assemble(stress_tensor[i,j] * dV) / V
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
@@ -216,6 +216,7 @@ def test_shear_test():
     for bc_type in ("displacement", "traction"):
         shear_test = ShearTest(25, bc_type=bc_type)
         shear_test.solve_problem()
+
 
 def test_body_force():
     body_force_test = BodyForceTest(25)
