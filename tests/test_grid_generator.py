@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from grid_generator import hyper_cube
+from grid_generator import hyper_rectangle
 from grid_generator import spherical_shell
 from grid_generator import hyper_simplex
 
@@ -10,6 +11,15 @@ def test_hyper_cube():
     _, _ = hyper_cube(2, 8)
     # three-dimensional case
     _, _ = hyper_cube(3, 8)
+    
+
+def test_hyper_rectangle():
+    # two-dimensional case
+    _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0), 10)
+    _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0), (50, 5))
+    # three-dimensional case
+    _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0, 2.0), 8)
+    _, _ = hyper_rectangle((0.0, 0.0), (10.0, 1.0, 2.0), (50, 5, 10))
 
 
 def test_spherical_shell():
@@ -28,5 +38,6 @@ def test_hyper_simplex():
 
 if __name__ == "__main__":
     test_hyper_cube()
+    test_hyper_rectangle()
     test_spherical_shell()
     test_hyper_simplex()
