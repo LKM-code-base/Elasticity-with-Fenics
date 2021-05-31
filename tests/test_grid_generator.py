@@ -26,6 +26,8 @@ def test_hyper_simplex():
     _, _ = hyper_simplex(2, 2)
 
 def test_cylinder():
+    # two-dimensional case
+    _, _ = cylinder(2, (0.3, 1.0), 3.0)
     # three-dimensional case
     _, _ = cylinder(3, (0.3, 1.0), 3.0)
 

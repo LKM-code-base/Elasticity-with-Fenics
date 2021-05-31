@@ -5,7 +5,7 @@ from enum import Enum, auto
 import math
 
 import dolfin as dlfn
-from mshr import Sphere, Circle, Cylinder, generate_mesh
+from mshr import Sphere, Circle, Cylinder, Polygon, generate_mesh
 
 
 class GeometryType(Enum):
@@ -74,12 +74,16 @@ class CylinderBoundary(dlfn.SubDomain):
         super().__init__()
         assert(isinstance(kwargs["mesh"], dlfn.Mesh))
         self._hmin = kwargs["mesh"].hmin()
+        self._space_dim = kwargs["mesh"].geometry().dim()
         self._radius = kwargs["radius"]
 
     def inside(self, x, on_boundary):
         # tolerance: half length of smallest element
         tol = self._hmin / 2.
-        result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius(x[2])) < tol
+        if self._space_dim == 2:
+            result = abs(math.sqrt(x[0]**2)- self._radius(x[1])) < tol
+        elif self._space_dim == 3:
+            result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius(x[2])) < tol
         return result and on_boundary
 
 def spherical_shell(dim, radii, n_refinements=0):
@@ -122,7 +126,7 @@ def spherical_shell(dim, radii, n_refinements=0):
 
     # mark boundaries
     BoundaryMarkers = SphericalAnnulusBoundaryMarkers
-    gamma_inner = CircularBoundary(mesh=mesh, radius=ro)
+    gamma_inner = CircularBoundary(mesh=mesh, radius=ri)
     gamma_inner.mark(facet_marker, BoundaryMarkers.interior_boundary.value)
     gamma_outer = CircularBoundary(mesh=mesh, radius=ro)
     gamma_outer.mark(facet_marker, BoundaryMarkers.exterior_boundary.value)
@@ -216,7 +220,7 @@ def cylinder(dim, radii, height, n_refinements=0):
     Creates the mesh of a cylinder using the mshr module.
     """
     assert isinstance(dim, int)
-    assert dim == 3
+    assert dim == 2 or dim == 3
 
     assert isinstance(radii, (list, tuple)) and len(radii) == 2
     rt, rb = radii
@@ -228,11 +232,24 @@ def cylinder(dim, radii, height, n_refinements=0):
     assert isinstance(n_refinements, int) and n_refinements >= 0
 
     # mesh generation
-    bottom = dlfn.Point(0., 0., 0.)
-    top = dlfn.Point(0., 0., height)
+    if dim == 2:
+        bottom = dlfn.Point(0., 0.)
+        top = dlfn.Point(0., height)
+    elif dim == 3:
+        bottom = dlfn.Point(0., 0., 0.)
+        top = dlfn.Point(0., 0., height)
 
-    domain = Cylinder(top, bottom, rt, rb, segments = 100)
-    mesh = generate_mesh(domain, 32)
+    if dim == 2:
+        domain = Polygon([ dlfn.Point(-rb/2., 0.),
+                           bottom,
+                           dlfn.Point(rb/2., 0.),
+                           dlfn.Point(rt/2., height),
+                           top,
+                           dlfn.Point(-rt/2.,height)])
+        mesh = generate_mesh(domain, 10)
+    elif dim == 3:
+        domain = Cylinder(top, bottom, rt, rb, segments = 100)
+        mesh = generate_mesh(domain, 32)
 
     # mesh refinement
     for i in range(n_refinements):
@@ -247,11 +264,19 @@ def cylinder(dim, radii, height, n_refinements=0):
 
     # mark boundaries
     BoundaryMarkers = CylinderBoundaryMarkers
+    
     gamma_side = CylinderBoundary(mesh = mesh, radius = radius)
     gamma_side.mark(facet_marker, BoundaryMarkers.side.value)
-    gamma_top = dlfn.CompiledSubDomain("near(x[2], height) && on_boundary", height = height)
-    gamma_top.mark(facet_marker, BoundaryMarkers.top.value)
-    gamma_bottom = dlfn.CompiledSubDomain("near(x[2], 0.0) && on_boundary")
-    gamma_bottom.mark(facet_marker, BoundaryMarkers.bottom.value)
-    
+
+    if dim == 2:
+        gamma_top = dlfn.CompiledSubDomain("near(x[1], height) && on_boundary", height = height)
+        gamma_top.mark(facet_marker, BoundaryMarkers.top.value)
+        gamma_bottom = dlfn.CompiledSubDomain("near(x[1], 0.0) && on_boundary")
+        gamma_bottom.mark(facet_marker, BoundaryMarkers.bottom.value)
+    elif dim == 3:
+        gamma_top = dlfn.CompiledSubDomain("near(x[2], height) && on_boundary", height = height)
+        gamma_top.mark(facet_marker, BoundaryMarkers.top.value)
+        gamma_bottom = dlfn.CompiledSubDomain("near(x[2], 0.0) && on_boundary")
+        gamma_bottom.mark(facet_marker, BoundaryMarkers.bottom.value)
+
     return mesh, facet_marker
