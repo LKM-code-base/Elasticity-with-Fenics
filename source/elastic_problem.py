@@ -393,9 +393,9 @@ class LinearElasticProblem(ProblemBase):
 
         # pass dimensionless numbers
         if hasattr(self, "_D"):
-            self._linear_elastic_solver.set_dimensionless_numbers(self._B, self._C, self._lref, self._tref, self._numsteps, self._D)
+            self._linear_elastic_solver.set_dimensionless_numbers_wave(self._C, self._B, self._lref, self._tref, self._numsteps, self._D)
         else:
-            self._linear_elastic_solver.set_dimensionless_numbers(self._B, self._C, self._lref, self._tref, self._numsteps)
+            self._linear_elastic_solver.set_dimensionless_numbers_wave(self._C, self._B, self._lref, self._tref, self._numsteps)
 
         # pass body force
         if hasattr(self, "_body_force"):

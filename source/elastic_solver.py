@@ -560,7 +560,7 @@ class LinearElasticitySolver():
             self._traction_bcs = traction_bcs
 
 # Anfang ############################################################################
-    def set_dimensionless_numbers(self, B, C, lref, tref, numsteps, D=None):
+    def set_dimensionless_numbers_wave(self, C, B=None, lref=None, tref=None, numsteps=None, D=None):
         """
         Updates the parameters of the model by creating or modifying class
         objects.
@@ -615,6 +615,28 @@ class LinearElasticitySolver():
         else:
             self._numsteps.assign(numsteps)
 # Ende ############################################################################
+
+    def set_dimensionless_numbers(self, C, D=None):
+        """
+        Updates the parameters of the model by creating or modifying class
+        objects.
+        """
+        assert isinstance(C, float)
+        assert isfinite(C)
+        assert C > 0.0
+        if not hasattr(self, "_C"):
+            self._C = dlfn.Constant(C)
+        else:
+            self._C.assign(C)
+
+        if D is not None:
+            assert isinstance(D, float)
+            assert isfinite(D)
+            assert D > 0.0
+            if not hasattr(self, "_D"):
+                self._D = dlfn.Constant(D)
+            else:
+                self._D.assign(D)
 
     @property
     def sub_space_association(self):
