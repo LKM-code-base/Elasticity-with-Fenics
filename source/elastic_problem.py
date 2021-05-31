@@ -6,7 +6,7 @@ from math import isfinite
 import dolfin as dlfn
 from auxiliary_methods import compute_elasticity_coefficients
 from auxiliary_methods import ElasticModuli
-from elastic_solver import LinearElasticitySolver, NonlinearElasticitySolver 
+from elastic_solver import CompressibleElasticitySolver
 from elastic_law import ElasticLaw
 
 class ProblemBase:
@@ -312,32 +312,9 @@ class CompressibleElasticProblem(ProblemBase):
 
         dlfn.File(fname) << self._boundary_markers
 
-        
-class LinearElasticProblem(CompressibleElasticProblem):
-    """
-    Class to simulate a linear elastic problem using the
-    `LinearElasticitySolver`.
-
-    Parameters
-    ----------
-    elastic_law: ElasticLaw
-        Underlying linear elastic law.
-    main_dir: str (optional)
-        Directory to save the results.
-    tol: float (optional)
-        Final tolerance.
-    maxiter: int (optional)
-        Maximum number of iterations in total.
-    """
-    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
-        """
-        Constructor of the class.
-        """
-        super().__init__(elastic_law, main_dir=None, tol=1e-10, maxiter=50)
-
     def _get_solver(self):
-        assert hasattr(self, "_linear_elastic_solver")
-        return self._linear_elastic_solver
+        assert hasattr(self, "_elastic_solver")
+        return self._elastic_solver
 
     def solve_problem(self):
         """
@@ -360,23 +337,22 @@ class LinearElasticProblem(CompressibleElasticProblem):
             self.set_parameters()
 
         # create solver object
-        if not hasattr(self, "_linear_elastic_solver"):
-            self._linear_elastic_solver = \
-                LinearElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
+        if not hasattr(self, "_elastic_solver"):
+            self._elastic_solver = \
+                CompressibleElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
 
         # pass boundary conditions
-        self._linear_elastic_solver.set_boundary_conditions(self._bcs)
+        self._elastic_solver.set_boundary_conditions(self._bcs)
 
         # pass dimensionless numbers
         if hasattr(self, "_D"):
-            self._linear_elastic_solver.set_dimensionless_numbers(self._C,
-                                                                  self._D)
+            self._elastic_solver.set_dimensionless_numbers(self._C, self._D)
         else:
-            self._linear_elastic_solver.set_dimensionless_numbers(self._C)
+            self._elastic_solver.set_dimensionless_numbers(self._C)
 
         # pass body force
         if hasattr(self, "_body_force"):
-            self._linear_elastic_solver.set_body_force(self._body_force)
+            self._elastic_solver.set_body_force(self._body_force)
 
         # solve problem
         if self._D is not None:
@@ -384,87 +360,7 @@ class LinearElasticProblem(CompressibleElasticProblem):
                       "D = {1:0.2f}".format(self._C, self._D))
         else:
             dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
-        self._linear_elastic_solver.solve()
-
-        # postprocess solution
-        self.postprocess_solution()
-
-        # write XDMF-files
-        self._write_xdmf_file()
-
-
-class NonlinearElasticProblem(CompressibleElasticProblem):
-    """
-    Class to simulate a nonlinear elastic problem using the
-    `NonlinearElasticitySolver`.
-
-    Parameters
-    ----------
-    elastic_law: ElasticLaw
-        Underlying linear elastic law.
-    main_dir: str (optional)
-        Directory to save the results.
-    tol: float (optional)
-        Final tolerance.
-    maxiter: int (optional)
-        Maximum number of iterations in total.
-    """
-    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
-        """
-        Constructor of the class.
-        """
-        super().__init__(elastic_law, main_dir=None, tol=1e-10, maxiter=50)
-
-    def _get_solver(self):
-        assert hasattr(self, "_nonlinear_elastic_solver")
-        return self._nonlinear_elastic_solver
-
-    def solve_problem(self):
-        """
-        Solve the stationary problem.
-        """
-        # setup mesh
-        self.setup_mesh()
-        assert self._mesh is not None
-        self._space_dim = self._mesh.geometry().dim()
-        self._n_cells = self._mesh.num_cells()
-
-        # setup boundary conditions
-        self.set_boundary_conditions()
-
-        # setup body force
-        self.set_body_force()
-
-        # setup parameters
-        if not hasattr(self, "_C"):
-            self.set_parameters()
-
-        # create solver object
-        if not hasattr(self, "_nonlinear_elastic_solver"):
-            self._nonlinear_elastic_solver = \
-                NonlinearElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
-
-        # pass boundary conditions
-        self._nonlinear_elastic_solver.set_boundary_conditions(self._bcs)
-
-        # pass dimensionless numbers
-        if hasattr(self, "_D"):
-            self._nonlinear_elastic_solver.set_dimensionless_numbers(self._C,
-                                                                  self._D)
-        else:
-            self._nonlinear_elastic_solver.set_dimensionless_numbers(self._C)
-
-        # pass body force
-        if hasattr(self, "_body_force"):
-            self._nonlinear_elastic_solver.set_body_force(self._body_force)
-
-        # solve problem
-        if self._D is not None:
-            dlfn.info("Solving problem with C = {0:.2f} and "
-                      "D = {1:0.2f}".format(self._C, self._D))
-        else:
-            dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
-        self._nonlinear_elastic_solver.solve()
+        self._elastic_solver.solve()
 
         # postprocess solution
         self.postprocess_solution()

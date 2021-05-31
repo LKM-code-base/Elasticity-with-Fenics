@@ -8,35 +8,19 @@ class ElasticLaw:
     def __init__(self):
         pass
 
-    def set_parameters(self, mesh, C, u, v, solution):
+    def set_parameters(self, mesh, elastic_ratio):
         
+        assert isinstance(mesh, dlfn.Mesh)
         self._mesh = mesh
-        self._C = C
-
-        self._u = u
-        self._v = v
-        self._solution = solution
 
         self._space_dim = self._mesh.geometry().dim()
-        self._N  = dlfn.FacetNormal(self._mesh)
-
-        self._dV = dlfn.Measure("dx", domain=self._mesh)
 
         self._I = dlfn.Identity(self._space_dim)
-        
-    def _strain(self):
-        raise NotImplementedError("You are calling a purely virtual method.")
     
-    def _dstrain(self):
-        raise NotImplementedError("You are calling a purely virtual method.")
+        assert isinstance(elastic_ratio, (dlfn.Constant, float))
+        self._elastic_ratio = elastic_ratio
 
-    def volume_scaling(self):
-        raise NotImplementedError("You are calling a purely virtual method.")
-
-    def traction_scaling(self):
-        raise NotImplementedError("You are calling a purely virtual method.")
-
-    def dw_int(self):
+    def dw_int(self, u, v):
         raise NotImplementedError("You are calling a purely virtual method.")
     
     def postprocess_cauchy_stress(self, displacement):
@@ -46,215 +30,153 @@ class ElasticLaw:
 class Hooke(ElasticLaw):
     def __init__(self):
         super().__init__()
-        self.nonlinear = False
-        self.linearity_type = "linear"
+        self.linearity_type = "Linear"
         self.name = "Hooke"
 
-    def set_parameters(self, mesh, C, u, v, solution):
-        super().set_parameters(mesh, C, u, v, solution)
-        
-    def _cauchy_stress(self):
+    def dw_int(self, u, v):
+        # u TrialFunction (only in the linear case)
+        assert isinstance(u, dlfn.function.argument.Argument)
+        # v TestFunction
+        assert isinstance(v, dlfn.function.argument.Argument)
 
-        assert hasattr(self, "_C")
+        assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
-        return self._C * dlfn.tr(self._strain()) * self._I \
-            + dlfn.Constant(2.0) * self._strain()
+        sym_grad = lambda w: dlfn.Constant(0.5)* (grad(w).T + grad(w))
 
-    def _strain(self):
-
-        assert hasattr(self, "_u")
-
-        return dlfn.Constant(0.5) * (grad(self._u).T + grad(self._u))
-
-    def _dstrain(self):
-
-        assert hasattr(self, "_v")
-
-        return dlfn.Constant(0.5) * (grad(self._v).T + grad(self._v))
-
-    def volume_scaling(self):
-        return dlfn.Constant(1.0)
-
-    def traction_scaling(self):
-        return dlfn.Constant(1.0)
-
-    def dw_int(self):
+        sigma = self._elastic_ratio * dlfn.tr(sym_grad(u)) * self._I \
+            + dlfn.Constant(2.0) * sym_grad(u)
         
-        assert hasattr(self, "_dV")
-
-        return inner(self._cauchy_stress(),self._dstrain()) * self._dV
+        return inner(sigma, sym_grad(v)) 
 
     def postprocess_cauchy_stress(self, displacement):
 
-        assert hasattr(self, "_C")
+        assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
+        
+        assert isinstance(displacement, dlfn.function.function.Function)
 
         displacement_gradient = dlfn.grad(displacement)
         # strain tensor (symbolic)
-        strain = dlfn.Constant(0.5) * (displacement_gradient + \
-            displacement_gradient.T)
+        strain = dlfn.Constant(0.5) * (displacement_gradient \
+            + displacement_gradient.T)
         
-        # dimensionless stress tensor (symbolic)
-        stress = dlfn.Constant(self._C) * \
-            dlfn.inner(self._I, strain) * self._I
-        stress += dlfn.Constant(2.0) * strain
+        # dimensionless Cauchy stress tensor (symbolic)
+        sigma = dlfn.Constant(self._elastic_ratio) \
+            * dlfn.inner(self._I, strain) * self._I \
+                + dlfn.Constant(2.0) * strain
 
-        return stress
+        return sigma
 
 
 class StVenantKirchhoff(ElasticLaw):
     def __init__(self):
         super().__init__()
-        self.nonlinear = True
-        self.linearity_type = "nonlinear"
+        self.linearity_type = "Nonlinear"
         self.name = "StVenantKirchhoff"
         
-    def set_parameters(self, mesh, C, u, v, solution):
-        super().set_parameters(mesh, C, u, v, solution)
+    def dw_int(self, u, v):
+        # u Function (in the nonlinear case)
+        assert isinstance(u, dlfn.function.function.Function)
+        # v TestFunction
+        assert isinstance(v, dlfn.function.argument.Argument)
         
+        assert hasattr(self, "_elastic_ratio")
+        assert hasattr(self, "_I")
+
         # kinematic variables
-        self._F = self._I + grad(self._solution)
-        self._CG = self._F.T * self._F
-        self._J = dlfn.det(self._F)
+        F = self._I + grad(u)
+        C = F.T * F
 
-    def _second_piola_kirchhoff_stress(self):
+        # strain
+        E = dlfn.Constant(0.5) * (C - self._I)
+        # 2. Piola-Kirchhoff stress
+        S = self._elastic_ratio * dlfn.tr(E) * self._I \
+            + dlfn.Constant(2.0) * E
 
-        assert hasattr(self, "_C")
-        assert hasattr(self, "_I")
+        dE = dlfn.Constant(0.5) * (F.T * grad(v)\
+             + grad(v).T * F)
 
-        return self._C * dlfn.tr(self._strain()) * self._I + \
-            dlfn.Constant(2.0) * self._strain()
-
-    def _strain(self):
-
-        assert hasattr(self, "_I")
-        assert hasattr(self, "_CG")
-
-        return dlfn.Constant(0.5) * (self._CG - self._I)
-
-    def _dstrain(self):
-
-        assert hasattr(self, "_F")
-        assert hasattr(self, "_v")
-
-        return dlfn.Constant(0.5) * (self._F.T * grad(self._v) + grad(self._v).T * self._F)
-
-    def volume_scaling(self):
-
-        assert hasattr(self, "_J")
-
-        return self._J
-
-    def traction_scaling(self):
-
-        assert hasattr(self, "_F")
-        assert hasattr(self, "_N")
-
-        return dlfn.sqrt(dlfn.dot(cofac(self._F) * self._N,\
-            cofac(self._F) * self._N))
-        
-
-    def dw_int(self):
-
-        assert hasattr(self, "_dV")
-
-        return inner(self._second_piola_kirchhoff_stress(),self._dstrain()) * self._dV
+        return inner(S, dE)
 
     def postprocess_cauchy_stress(self, displacement):
 
-        assert hasattr(self, "_C")
+        assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
+        
+        assert isinstance(displacement, dlfn.function.function.Function)
 
         displacement_gradient = dlfn.grad(displacement)
-        
-        # strain tensor (symbolic)
+
         deformation_gradient = self._I + displacement_gradient
         right_cauchy_green_tensor = deformation_gradient.T * deformation_gradient
         volume_ratio = dlfn.det(deformation_gradient)
 
+        # strain tensor (symbolic)
         strain = dlfn.Constant(0.5) * (right_cauchy_green_tensor - self._I)
-        # dimensionless 2. PK stress tensor (symbolic)
-        S = dlfn.Constant(self._C) * dlfn.inner(self._I, strain) * self._I
-        S += dlfn.Constant(2.0) * strain
+        
+        # dimensionless 2. Piola-Kirchhoff stress tensor (symbolic)
+        S = dlfn.Constant(self._elastic_ratio) \
+            * dlfn.inner(self._I, strain) * self._I \
+                + dlfn.Constant(2.0) * strain
 
-        stress = (deformation_gradient * S * deformation_gradient.T) / volume_ratio
-
-        return stress
+        # dimensionless Cauchy stress tensor (symbolic)
+        sigma = (deformation_gradient * S * deformation_gradient.T) / volume_ratio
+        
+        return sigma
 
 
 class NeoHooke(ElasticLaw):
     def __init__(self):
         super().__init__()
-        self.nonlinear = True
-        self.linearity_type = "nonlinear"
+        self.linearity_type = "Nonlinear"
         self.name = "NeoHooke"
         
-    def set_parameters(self, mesh, C, u, v, solution):
-        super().set_parameters(mesh, C, u, v, solution)
+    def dw_int(self, u, v):
+        # u Function (in the nonlinear case)
+        assert isinstance(u, dlfn.function.function.Function)
+        # v TestFunction
+        assert isinstance(v, dlfn.function.argument.Argument)
         
+        assert hasattr(self, "_elastic_ratio")
+        assert hasattr(self, "_I")
+
         # kinematic variables
-        self._F = self._I + grad(self._solution)
-        self._CG = self._F.T * self._F
-        self._J = dlfn.det(self._F)
+        F = self._I + grad(u)
+        C = F.T * F
+        J = dlfn.det(F)
 
-    def _second_piola_kirchhoff_stress(self):
+        # strain
+        E = dlfn.Constant(0.5) * (C - self._I)
+        # 2. Piola-Kirchhoff stress
+        S = self._I - J ** (-self._elastic_ratio) * inv(C)
 
-        assert hasattr(self, "_C")
-        assert hasattr(self, "_I")
+        dE = dlfn.Constant(0.5) * (F.T * grad(v)\
+             + grad(v).T * F)
 
-        return self._I + - self._J ** (-self._C) * inv(self._CG)
-
-    def _strain(self):
-
-        assert hasattr(self, "_I")
-        assert hasattr(self, "_CG")
-
-        return dlfn.Constant(0.5) * (self._CG - self._I)
-
-    def _dstrain(self):
-
-        assert hasattr(self, "_F")
-        assert hasattr(self, "_v")
-
-        return dlfn.Constant(0.5) * (self._F.T * grad(self._v) + grad(self._v).T * self._F)
-
-    def volume_scaling(self):
-
-        assert hasattr(self, "_J")
-
-        return self._J
-
-    def traction_scaling(self):
-
-        assert hasattr(self, "_F")
-        assert hasattr(self, "_N")
-
-        return dlfn.sqrt(dlfn.dot(cofac(self._F) * self._N,\
-            cofac(self._F) * self._N))
-
-    def dw_int(self):
-
-        assert hasattr(self, "_dV")
-
-        return inner(self._second_piola_kirchhoff_stress(),self._dstrain()) * self._dV
+        return inner(S, dE)
 
     def postprocess_cauchy_stress(self, displacement):
 
-        assert hasattr(self, "_C")
+        assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
+        
+        assert isinstance(displacement, dlfn.function.function.Function)
 
         displacement_gradient = dlfn.grad(displacement)
-        
-        # strain tensor (symbolic)
+
         deformation_gradient = self._I + displacement_gradient
         right_cauchy_green_tensor = deformation_gradient.T * deformation_gradient
         volume_ratio = dlfn.det(deformation_gradient)
 
+        # strain tensor (symbolic)
         strain = dlfn.Constant(0.5) * (right_cauchy_green_tensor - self._I)
-        # dimensionless 2. PK stress tensor (symbolic)
-        S = self._I - volume_ratio ** (-self._C) * inv(right_cauchy_green_tensor)
         
-        stress = (deformation_gradient * S * deformation_gradient.T) / volume_ratio
+        # dimensionless 2. Piola-Kirchhoff stress tensor (symbolic)
+        S = self._I \
+            - volume_ratio ** (-self._elastic_ratio) * inv(right_cauchy_green_tensor)
 
-        return stress
+        # dimensionless Cauchy stress tensor (symbolic)
+        sigma = (deformation_gradient * S * deformation_gradient.T) / volume_ratio
+        
+        return sigma

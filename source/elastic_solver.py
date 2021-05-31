@@ -376,7 +376,7 @@ class CompressibleElasticitySolver(SolverBase):
     
     def _setup_problem(self):
         """
-        Method setting up nonlinear solver objects of the stationary problem.
+        Method setting up solver objects of the stationary problem.
         """
         assert hasattr(self, "_mesh")
         assert hasattr(self, "_boundary_markers")
@@ -396,10 +396,13 @@ class CompressibleElasticitySolver(SolverBase):
         self._dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
         
         # setup the parameters for the elastic law
-        self._elastic_law.set_parameters(self._mesh, self._C, self._u, self._v, self._solution)
+        self._elastic_law.set_parameters(self._mesh, self._C)
         
         # virtual work
-        self._dw_int = self._elastic_law.dw_int()
+        if self._elastic_law.linearity_type == "Linear":
+            self._dw_int = self._elastic_law.dw_int(self._u, self._v) * self._dV
+        elif self._elastic_law.linearity_type == "Nonlinear":
+            self._dw_int = self._elastic_law.dw_int(self._solution, self._v) * self._dV
 
         # virtual work of external forces
         self._dw_ext = dlfn.dot(self._null_vector, self._v) * self._dV
@@ -408,7 +411,7 @@ class CompressibleElasticitySolver(SolverBase):
         if hasattr(self, "_body_force"):
             assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
                                         "the body forces is not specified."
-            self._dw_ext += self._D * self._elastic_law.volume_scaling() * dot(self._body_force, self._v) * self._dV
+            self._dw_ext += self._D * dot(self._body_force, self._v) * self._dV
         
         # add boundary tractions
         if hasattr(self, "_traction_bcs"):
@@ -422,97 +425,53 @@ class CompressibleElasticitySolver(SolverBase):
                 if bc_type is TractionBCType.constant:
                     assert isinstance(traction, (tuple, list))
                     const_function = dlfn.Constant(traction)
-                    self._dw_ext += self._elastic_law.traction_scaling() * dot(const_function, self._v) * self._dA(bndry_id)
+                    self._dw_ext += dot(const_function, self._v) * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.constant_component:
                     assert isinstance(traction, float)
                     const_function = dlfn.Constant(traction)
-                    self._dw_ext += self._elastic_law.traction_scaling() * const_function * self._v[component_index] * self._dA(bndry_id)
+                    self._dw_ext += const_function * self._v[component_index] * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function:
                     assert isinstance(traction, dlfn.Expression)
-                    self._dw_ext += self._elastic_law.traction_scaling() * dot(traction, self._v) * self._dA(bndry_id)
+                    self._dw_ext += dot(traction, self._v) * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function_component:
                     assert isinstance(traction, dlfn.Expression)
-                    self._dw_ext += self._elastic_law.traction_scaling() * traction * self._v[component_index] * self._dA(bndry_id)
+                    self._dw_ext += traction * self._v[component_index] * self._dA(bndry_id)
         
-        
-class LinearElasticitySolver(CompressibleElasticitySolver):
-    """
-    Class to simulate linear compressible elasticity.
-    """
-
-    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
-        # call constructor of base class
-        super().__init__(mesh, boundary_markers, elastic_law, polynomial_degree)
-    
-    def _setup_problem(self):
-        """
-        Method setting up linear solver objects of the stationary problem.
-        """
-        super()._setup_problem()
-        
-        # linear variational problem
-        self._linear_problem = dlfn.LinearVariationalProblem(self._dw_int, self._dw_ext,
+        if self._elastic_law.linearity_type == "Linear":
+            # linear variational problem
+            self._problem = dlfn.LinearVariationalProblem(self._dw_int, self._dw_ext,
                                                              self._solution,
                                                              self._dirichlet_bcs)
-        # setup linear variational solver
-        self._linear_solver = dlfn.LinearVariationalSolver(self._linear_problem)
+            # setup linear variational solver
+            self._solver = dlfn.LinearVariationalSolver(self._problem)
+        elif self._elastic_law.linearity_type == "Nonlinear":
+            self._Form = self._dw_int - self._dw_ext
+            self._J_newton = dlfn.derivative(self._Form, self._solution)
+            self._problem = dlfn.NonlinearVariationalProblem(self._Form,
+                                                                self._solution,
+                                                                self._dirichlet_bcs,
+                                                                J = self._J_newton)
+            # setup linear variational solver
+            self._solver = dlfn.NonlinearVariationalSolver(self._problem)
 
     def solve(self):
         """
-        Solves the linear problem.
+        Solves the elastic problem.
         """
         
         # setup problem
 
-        if not all(hasattr(self, attr) for attr in ("_linear_solver",
-                                                    "_linear_problem",
+        if not all(hasattr(self, attr) for attr in ("_solver",
+                                                    "_problem",
                                                     "_solution")):
             self._setup_problem()
 
-        dlfn.info("Starting solution of linear elastic problem...")
-        self._linear_solver.solve()
-
-
-class NonlinearElasticitySolver(CompressibleElasticitySolver):
-    """
-    Class to simulate nonlinear compressible elasticity.
-    """
-    
-    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
-        # call constructor of base class
-        super().__init__(mesh, boundary_markers, elastic_law, polynomial_degree)
-
-    def _setup_problem(self):
-        """
-        Method setting up nonlinear solver objects of the stationary problem.
-        """
-        super()._setup_problem()
-       
-        # nonlinear variational problem
-        self._Form = self._dw_int - self._dw_ext
-        self._J_newton = dlfn.derivative(self._Form, self._solution)
-        self._nonlinear_problem = dlfn.NonlinearVariationalProblem(self._Form,
-                                                             self._solution,
-                                                             self._dirichlet_bcs,
-                                                             J = self._J_newton)
-        # setup linear variational solver
-        self._nonlinear_solver = dlfn.NonlinearVariationalSolver(self._nonlinear_problem)
-
-    def solve(self):
-        """
-        Solves the nonlinear problem.
-        """
-        # setup problem
-        if not all(hasattr(self, attr) for attr in ("_nonlinear_solver",
-                                                    "_nonlinear_problem",
-                                                    "_solution")):
-            self._setup_problem()
-
-        dlfn.info("Starting solution of nonlinear elastic problem...")
-        self._nonlinear_solver.solve()
+        dlfn.info("Starting solution of elastic problem...")
+        self._solver.solve()   
+        
 
 class IncompressibleElasticitySolver(SolverBase):
     pass
