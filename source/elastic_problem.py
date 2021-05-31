@@ -8,7 +8,7 @@ from auxiliary_methods import compute_elasticity_coefficients
 from auxiliary_methods import ElasticModuli
 from elastic_solver import LinearElasticitySolver as Solver
 
-
+# HIER MUSS NOCH EIN PAAR FUNKTIONEN ANGEPASST WERDEN ################
 class ProblemBase:
     _suffix = ".xdmf"
 
@@ -89,7 +89,7 @@ class ProblemBase:
         assert isinstance(current_time, float)
 
         # get filename
-        fname = self._get_filename()
+        fname = self._get_filename(current_time)
         assert fname.endswith(".xdmf")
 
         # create results directory
@@ -120,7 +120,7 @@ class ProblemBase:
             if hasattr(self, "_additional_field_output"):
                 for field in self._additional_field_output:
                     results_file.write(field, current_time)
-
+    
     def postprocess_solution(self):  # pragma: no cover
         """
         Virtual method for additional post-processing.
@@ -219,7 +219,7 @@ class LinearElasticProblem(ProblemBase):
 
         return sigma
 
-    def _get_filename(self):
+    def _get_filename(self, current_time=0.0):
         """
         Class method returning a filename.
         """
@@ -227,7 +227,7 @@ class LinearElasticProblem(ProblemBase):
         assert hasattr(self, "_problem_name")
         problem_name = self._problem_name
 
-        fname = problem_name
+        fname = problem_name + "_" + str(current_time).replace(".","")
         fname += self._suffix
 
         return path.join(self._results_dir, fname)
@@ -236,19 +236,27 @@ class LinearElasticProblem(ProblemBase):
         assert hasattr(self, "_linear_elastic_solver")
         return self._linear_elastic_solver
 
+# Anfang ############################################################################
     def set_parameters(self, **kwargs):
         """
         Sets up the parameters of the model by creating or modifying class
         objects.
         """
         if "C" in kwargs.keys():
-            # 1st dimensionless coefficient
+            # 2nd dimensionless coefficient for Lame constant
             C = kwargs["C"]
             assert isinstance(C, float)
             assert isfinite(C)
             assert C > 0.0
             self._C = C
-            # 2nd dimensionless coefficient
+            if "B" in kwargs.keys():
+                # 1st dimensionless coefficient for density
+                B = kwargs["B"]
+                assert isinstance(B, float)
+                assert isfinite(B)
+                assert B > 0.0
+                self._B = B
+            # 3rd dimensionless coefficient for body force
             if "D" in kwargs.keys():
                 D = kwargs["D"]
                 assert isinstance(D, float)
@@ -259,17 +267,46 @@ class LinearElasticProblem(ProblemBase):
         else:
             # extract elastic moduli
             cleaned_kwargs = kwargs.copy()
+            if "rho" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("rho")
             if "lref" in cleaned_kwargs.keys():
                 cleaned_kwargs.pop("lref")
             if "bref" in cleaned_kwargs.keys():
                 cleaned_kwargs.pop("bref")
+            if "tref" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("tref")
+            if "numsteps" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("numsteps")
+            
             elastic_moduli = compute_elasticity_coefficients(**cleaned_kwargs)
             lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
             mu = elastic_moduli[ElasticModuli.ShearModulus]
+            
             # 1st dimensionless coefficient
+            if "lref" in kwargs.keys() and "tref" in kwargs.keys() and "rho" in kwargs.keys():
+                # reference length = length in x direction?
+                lref = kwargs["lref"]
+                assert isinstance(lref, float)
+                assert isfinite(lref)
+                assert lref > 0.0
+                self._lref = lref
+                # reference time = end time
+                tref = kwargs["tref"]
+                assert isinstance(tref, float)
+                assert isfinite(tref)
+                assert tref > 0.0
+                self._tref = tref
+                # reference value for density
+                rho = kwargs["rho"]
+                assert isinstance(rho, float)
+                assert isfinite(rho)
+                assert rho > 0.0
+                self._B = (rho * lref**2) / (mu * tref**2)
+                
+            # 2nd dimensionless coefficient
             self._C = lmbda / mu
 
-            # 2nd optional dimensionless coefficient
+            # 3rd optional dimensionless coefficient
             if "lref" in kwargs.keys() and "bref" in kwargs.keys():
                 # reference length
                 lref = kwargs["lref"]
@@ -281,11 +318,19 @@ class LinearElasticProblem(ProblemBase):
                 assert isinstance(bref, float)
                 assert isfinite(bref)
                 assert bref > 0.0
-                # 2nd optional dimensionless coefficient
+                # 3rd optional dimensionless coefficient
                 self._D = bref * lref / mu
 
             else:
                 self._D = None
+       
+        # step number
+        numsteps = kwargs["numsteps"]
+        assert isinstance(numsteps, int)
+        assert isfinite(numsteps)
+        assert numsteps > 2  # due to backward 2. order scheme
+        self._numsteps = numsteps
+# Ende ############################################################################
 
     def write_boundary_markers(self):
         """
@@ -307,6 +352,73 @@ class LinearElasticProblem(ProblemBase):
         fname = path.join(self._results_dir, fname)
 
         dlfn.File(fname) << self._boundary_markers
+
+# Anfang ############################################################################
+    def solve_wave_problem(self):
+        """
+        Solve the elastic wave problem.
+        """
+        # setup mesh
+        self.setup_mesh()
+        assert self._mesh is not None
+        self._space_dim = self._mesh.geometry().dim()
+        self._n_cells = self._mesh.num_cells()
+
+        # setup boundary conditions
+        self.set_boundary_conditions()
+
+        # setup body force
+        self.set_body_force()
+
+        # setup parameters
+        if not hasattr(self, "_C"):
+            self.set_parameters()
+        if not hasattr(self, "_B"):
+            self.set_parameters()
+        if not hasattr(self, "_tref"):
+            self.set_parameters()
+        if not hasattr(self, "_lref"):
+            self.set_parameters()
+        if not hasattr(self, "_numsteps"):
+            self.set_parameters()
+
+        # create solver object
+        if not hasattr(self, "_linear_elastic_solver"):
+            self._linear_elastic_solver = \
+                Solver(self._mesh, self._boundary_markers)
+
+        # pass boundary conditions
+        self._linear_elastic_solver.set_boundary_conditions(self._bcs)
+
+        # pass dimensionless numbers
+        if hasattr(self, "_D"):
+            self._linear_elastic_solver.set_dimensionless_numbers(self._B, self._C, self._lref, self._tref, self._numsteps, self._D)
+        else:
+            self._linear_elastic_solver.set_dimensionless_numbers(self._B, self._C, self._lref, self._tref, self._numsteps)
+
+        # pass body force
+        if hasattr(self, "_body_force"):
+            self._linear_elastic_solver.set_body_force(self._body_force)
+
+        # time stepping
+        dt = self._tref / self._numsteps
+        t = 0.0
+        for n in range(self._numsteps):
+            # solve problem
+            t += dt
+            if self._D is not None:
+                dlfn.info("Solving problem with C = {0:.2f} and C = {1:.2f} and "
+                          "D = {2:0.2f}".format(self._B,self._C, self._D))
+            else:
+                dlfn.info("Solving problem with C = {0:.2f} and C = {1:.2f}".format(self._B,self._C))
+            self._linear_elastic_solver.solve_wave()
+        
+            # postprocess solution
+            self.postprocess_solution()
+
+            # write XDMF-files
+            self._write_xdmf_file(current_time=t)
+# Ende ############################################################################
 
     def solve_problem(self):
         """

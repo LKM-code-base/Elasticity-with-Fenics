@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import numpy as np
 from math import isfinite
 from enum import Enum, auto
 
@@ -37,13 +38,11 @@ class LinearElasticitySolver():
     _field_association = {value: key for key, value in _sub_space_association.items()}
     _null_scalar = dlfn.Constant(0.)
 
-    def __init__(self, mesh, boundary_markers, polynomial_degree=1):
+    def __init__(self, mesh, boundary_markers):
         # input check
         assert isinstance(mesh, dlfn.Mesh)
         assert isinstance(boundary_markers, (dlfn.cpp.mesh.MeshFunctionSizet,
                                              dlfn.cpp.mesh.MeshFunctionInt))
-        assert isinstance(polynomial_degree, int)
-        assert polynomial_degree > 0
         # set mesh variables
         self._mesh = mesh
         self._boundary_markers = boundary_markers
@@ -56,9 +55,9 @@ class LinearElasticitySolver():
 
         # set discretization parameters
         # polynomial degree
-        self._p_deg = polynomial_degree
+        self._p_deg = 1
         # quadrature degree
-        q_deg = 2 * self._p_deg
+        q_deg = self._p_deg + 2
         dlfn.parameters["form_compiler"]["quadrature_degree"] = q_deg
 
     def _check_boundary_condition_format(self, bc):
@@ -76,12 +75,9 @@ class LinearElasticitySolver():
         assert isinstance(bc[0], (DisplacementBCType, TractionBCType))
         rank = 1
         # 2. check boundary id
-        if bc[0] not in (DisplacementBCType.fixed_component_pointwise, DisplacementBCType.fixed_pointwise):
-            assert isinstance(bc[1], int)
-            assert bc[1] in all_bndry_ids, "Boundary id {0} ".format(bc[1]) +\
-                                           "was not found in the boundary markers."
-        else:
-            assert isinstance(bc[1], dlfn.SubDomain)
+        assert isinstance(bc[1], int)
+        assert bc[1] in all_bndry_ids, "Boundary id {0} ".format(bc[1]) +\
+                                       "was not found in the boundary markers."
         # 3. check value type
         # distinguish between scalar and vector field
         if rank == 0:
@@ -161,15 +157,15 @@ class LinearElasticitySolver():
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.fixed_pointwise:
-                assert isinstance(bndry_id, dlfn.SubDomain)
                 bc_object = dlfn.DirichletBC(self._Vh, self._null_vector,
-                                             bndry_id, "pointwise")
+                                             self._boundary_markers, bndry_id,
+                                             "pointwise")
                 self._dirichlet_bcs.append(bc_object)
 
             elif bc_type is DisplacementBCType.fixed_component_pointwise:
-                assert isinstance(bndry_id, dlfn.SubDomain)
                 bc_object = dlfn.DirichletBC(self._Vh.sub(component_index),
-                                             self._null_scalar, bndry_id,
+                                             self._null_scalar,
+                                             self._boundary_markers, bndry_id,
                                              "pointwise")
                 self._dirichlet_bcs.append(bc_object)
 
@@ -203,7 +199,216 @@ class LinearElasticitySolver():
 
             else:  # pragma: no cover
                 raise RuntimeError()
+
             # HINT: traction boundary conditions are covered in _setup_problem
+
+# Anfang ############################################################################    
+    def _setup_problem_wave(self):
+        """
+        Method setting up wave propagation solver objects of the transient problem.
+        """
+        assert hasattr(self, "_mesh")
+        assert hasattr(self, "_boundary_markers")
+
+        self._setup_function_spaces()
+        self._setup_boundary_conditions()
+
+        # creating test and trial functions
+        u = dlfn.TrialFunction(self._Vh)
+        v = dlfn.TestFunction(self._Vh)
+
+        # solution
+        self._solution = dlfn.Function(self._Vh)
+
+        # volume element
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
+
+        # dimensionless parameters
+        C = self._C
+        B = self._B
+        
+        # time step
+        dt = self._tref / self._numsteps  # for looping
+        delt = dlfn.Constant(dt)  # for function
+        
+        # reference length and u0max
+        lref = self._lref
+        u0max = 1.0
+        
+        # initial condition
+        pi = dlfn.Constant(np.pi)
+        omega = pi/lref * dlfn.sqrt((C+2.0)/(B*self._tref**2/lref**2))
+        initdis = dlfn.Expression(("u0max * sin(pi/L*x[0]) * cos(omega*t)", "0.0"), degree=2, u0max=u0max, pi=pi, L=lref, omega=dlfn.Constant(omega), t=0.0)
+        initvel = dlfn.Expression(("0.0","0.0"), degree=2)
+        
+        # interpolation of initial conditions
+        u0 = dlfn.interpolate(initdis, self._Vh)
+        v0 = dlfn.interpolate(initvel, self._Vh)
+        
+        # auxiliary function
+        def sym_grad(u):
+            return dlfn.Constant(0.5) * (grad(u) + grad(u).T)
+        
+        # weak forms (backward difference scheme 2. order)
+        strain = sym_grad(u)
+        dstrain = sym_grad(v)
+        
+        ## 1. Iteration ##
+        # virtual work of internal forces including acceleration term approximation
+        dw_int1 = (B * dlfn.dot(u, v) 
+                  + (C * dlfn.tr(strain) * dlfn.tr(dstrain)
+                  + inner(dlfn.Constant(2.0) * strain, dstrain)) * delt**2
+                  ) * dV
+        # virtual work of external forces
+        dw_ext1 = (dlfn.dot(self._null_vector, v) + B * dlfn.dot(u0 + dt * v0,v)) * dV
+        
+        # add body force term
+        if hasattr(self, "_body_force"):
+            assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
+                                        "the body forces is not specified."
+            dw_ext1 += self._D * dlfn.dot(self._body_force, v) * dV * delt**2
+        
+        # add boundary tractions
+        if hasattr(self, "_traction_bcs"):
+            for bc in self._traction_bcs:
+                # unpack values
+                if len(bc) == 3:
+                    bc_type, bndry_id, traction = bc
+                elif len(bc) == 4:
+                    bc_type, bndry_id, component_index, traction = bc
+
+                if bc_type is TractionBCType.constant:
+                    assert isinstance(traction, (tuple, list))
+                    const_function = dlfn.Constant(traction)
+                    dw_ext1 += dot(const_function , v) * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.constant_component:
+                    assert isinstance(traction, float)
+                    const_function = dlfn.Constant(traction)
+                    dw_ext1 += const_function * v[component_index] * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.function:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext1 += dot(traction, v) * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.function_component:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext1 += traction * v[component_index] * dA(bndry_id) * delt**2
+                    
+        # solution for u1
+        dlfn.solve(dw_int1 == dw_ext1, self._solution, self._dirichlet_bcs)
+        u1 = self._solution
+        
+        ## 2. Iteration ##
+        # virtual work of internal forces including acceleration term approximation
+        dw_int2 = (B * dlfn.dot(u, v)
+                  + (C * dlfn.tr(strain) * dlfn.tr(dstrain)
+                  + inner(dlfn.Constant(2.0) * strain, dstrain)) * delt**2
+                  ) * dV
+        
+        # virtual work of external forces
+        dw_ext2 = (dlfn.dot(self._null_vector, v) * delt**2
+                  + B * dlfn.dot(2*u1 - u0,v)) * dV
+
+        # add body force term
+        if hasattr(self, "_body_force"):
+            assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
+                                        "the body forces is not specified."
+            dw_ext2 += self._D * dlfn.dot(self._body_force, v) * dV * delt**2
+        
+        # add boundary tractions
+        if hasattr(self, "_traction_bcs"):
+            for bc in self._traction_bcs:
+                # unpack values
+                if len(bc) == 3:
+                    bc_type, bndry_id, traction = bc
+                elif len(bc) == 4:
+                    bc_type, bndry_id, component_index, traction = bc
+
+                if bc_type is TractionBCType.constant:
+                    assert isinstance(traction, (tuple, list))
+                    const_function = dlfn.Constant(traction)
+                    dw_ext2 += dot(const_function , v) * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.constant_component:
+                    assert isinstance(traction, float)
+                    const_function = dlfn.Constant(traction)
+                    dw_ext2 += const_function * v[component_index] * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.function:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext2 += dot(traction, v) * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.function_component:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext2 += traction * v[component_index] * dA(bndry_id) * delt**2
+                    
+        # solution for u2
+        dlfn.solve(dw_int2 == dw_ext2, self._solution, self._dirichlet_bcs)
+        u2 = self._solution
+        
+        ## n.th Iteration ##
+        # assigning old solution
+        uold_2 = u0
+        uold_1 = u1
+        uold_0 = u2
+        
+        # virtual work of internal forces including acceleration term approximation
+        dw_int = (2 * B * dlfn.dot(u, v)
+                 + (C * dlfn.tr(strain) * dlfn.tr(dstrain)
+                 + inner(dlfn.Constant(2.0) * strain, dstrain)) * delt**2
+                 ) * dV
+        
+        # virtual work of external forces
+        dw_ext = (dlfn.dot(self._null_vector, v) * delt**2
+                 + B * dlfn.dot(5 * uold_0 - 4 * uold_1 + uold_2,v)) * dV
+
+        # add body force term
+        if hasattr(self, "_body_force"):
+            assert hasattr(self, "_D"), "Dimensionless parameter related to" + \
+                                        "the body forces is not specified."
+            dw_ext += self._D * dlfn.dot(self._body_force, v) * dV * delt**2
+        
+        # add boundary tractions
+        if hasattr(self, "_traction_bcs"):
+            for bc in self._traction_bcs:
+                # unpack values
+                if len(bc) == 3:
+                    bc_type, bndry_id, traction = bc
+                elif len(bc) == 4:
+                    bc_type, bndry_id, component_index, traction = bc
+
+                if bc_type is TractionBCType.constant:
+                    assert isinstance(traction, (tuple, list))
+                    const_function = dlfn.Constant(traction)
+                    dw_ext += dot(const_function , v) * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.constant_component:
+                    assert isinstance(traction, float)
+                    const_function = dlfn.Constant(traction)
+                    dw_ext += const_function * v[component_index] * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.function:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext += dot(traction, v) * dA(bndry_id) * delt**2
+
+                elif bc_type is TractionBCType.function_component:
+                    assert isinstance(traction, dlfn.Expression)
+                    dw_ext += traction * v[component_index] * dA(bndry_id) * delt**2
+                    
+        # wave variational problem
+        self._wave_problem = dlfn.LinearVariationalProblem(dw_int, dw_ext,
+                                                           self._solution,
+                                                           self._dirichlet_bcs)
+        # setup wave variational solver
+        self._wave_solver = dlfn.LinearVariationalSolver(self._wave_problem)
+
+        # updating solution
+        uold_2.assign(uold_1)
+        uold_1.assign(uold_0)
+        uold_0.assign(self._solution)
+# Ende ############################################################################   
 
     def _setup_problem(self):
         """
@@ -354,11 +559,21 @@ class LinearElasticitySolver():
         if len(traction_bcs) > 0:
             self._traction_bcs = traction_bcs
 
-    def set_dimensionless_numbers(self, C, D=None):
+# Anfang ############################################################################
+    def set_dimensionless_numbers(self, B, C, lref, tref, numsteps, D=None):
         """
         Updates the parameters of the model by creating or modifying class
         objects.
         """
+        if B is not None:
+            assert isinstance(B, float)
+            assert isfinite(B)
+            assert B > 0.0
+            if not hasattr(self, "_B"):
+                self._B = dlfn.Constant(B)
+            else:
+                self._B.assign(B)
+        
         assert isinstance(C, float)
         assert isfinite(C)
         assert C > 0.0
@@ -375,6 +590,31 @@ class LinearElasticitySolver():
                 self._D = dlfn.Constant(D)
             else:
                 self._D.assign(D)
+        
+        assert isinstance(lref, float)
+        assert isfinite(lref)
+        assert lref > 0.0
+        if not hasattr(self, "_lref"):
+            self._lref = lref
+        else:
+            self._lref.assign(lref)
+            
+        assert isinstance(tref, float)
+        assert isfinite(tref)
+        assert tref > 0.0
+        if not hasattr(self, "_tref"):
+            self._tref = tref
+        else:
+            self._tref.assign(tref)
+        
+        assert isinstance(numsteps, int)
+        assert isfinite(numsteps)
+        assert numsteps > 2
+        if not hasattr(self, "_numsteps"):
+            self._numsteps = numsteps
+        else:
+            self._numsteps.assign(numsteps)
+# Ende ############################################################################
 
     @property
     def sub_space_association(self):
@@ -401,6 +641,22 @@ class LinearElasticitySolver():
         # check rank of expression
         assert body_force.value_rank() == 1
         self._body_force = body_force
+
+# Anfang ############################################################################
+    def solve_wave(self):
+        """
+        Solves the elastic wave propagation.
+        """
+        # setup problem
+        if not all(hasattr(self, attr) for attr in ("_wave_solver",
+                                                    "_wave_problem",
+                                                    "_solution")):
+            self._setup_problem_wave()
+
+        dlfn.info("Starting solution of elastic wave propagation problem...")
+        self._wave_solver.solve()
+
+# Ende ############################################################################
 
     def solve(self):
         """
