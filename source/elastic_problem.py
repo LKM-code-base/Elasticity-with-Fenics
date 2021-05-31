@@ -325,11 +325,12 @@ class LinearElasticProblem(ProblemBase):
                 self._D = None
        
         # step number
-        numsteps = kwargs["numsteps"]
-        assert isinstance(numsteps, int)
-        assert isfinite(numsteps)
-        assert numsteps > 2  # due to backward 2. order scheme
-        self._numsteps = numsteps
+        if "numsteps" in kwargs.keys():
+            numsteps = kwargs["numsteps"]
+            assert isinstance(numsteps, int)
+            assert isfinite(numsteps)
+            assert numsteps > 2  # due to backward 2. order scheme
+            self._numsteps = numsteps
 # Ende ############################################################################
 
     def write_boundary_markers(self):
