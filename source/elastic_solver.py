@@ -231,7 +231,9 @@ class LinearElasticitySolver():
         lref = self._lref
         
         # reference time tref
-        c_t = dlfn.sqrt(self._mu/self._rho)  # c_t: Transversal-Wellengeschwindigkeit, zur Normierung der Zeit
+        mu = self._mu
+        rho = self._rho
+        c_t = dlfn.sqrt(mu/rho)  # c_t: Transversal-Wellengeschwindigkeit, zur Normierung der Zeit
         tref = lref/c_t
         
         # initial condition
