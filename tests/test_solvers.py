@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from grid_generator import hyper_cube
+from grid_generator import hyper_cuboid
 from grid_generator import HyperCubeBoundaryMarkers as BoundaryMarkers
 from elastic_problem import LinearElasticProblem
 from elastic_solver import DisplacementBCType
