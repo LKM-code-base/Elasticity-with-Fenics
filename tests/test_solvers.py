@@ -43,7 +43,7 @@ class WaveTest(LinearElasticProblem):
         
     def setup_mesh(self):
         # create mesh
-        self._mesh, self._boundary_markers = hyper_cube(2, self.r, self._n_points)
+        self._mesh, self._boundary_markers = hyper_cuboid(2, self.r, self._n_points)
     
     def set_boundary_conditions(self):
         # boundary conditions
