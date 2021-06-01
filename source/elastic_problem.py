@@ -298,10 +298,10 @@ class LinearElasticProblem(ProblemBase):
                 assert rho > 0.0
                 self._rho = rho
                 
-            # 2nd dimensionless coefficient
+            # 1st dimensionless coefficient
             self._C = lmbda / mu
 
-            # 3rd optional dimensionless coefficient
+            # 2nd optional dimensionless coefficient
             if "lref" in kwargs.keys() and "bref" in kwargs.keys():
                 # reference length
                 lref = kwargs["lref"]
@@ -327,11 +327,11 @@ class LinearElasticProblem(ProblemBase):
             assert numsteps > 2  # due to backward 2. order scheme
             self._numsteps = numsteps
             
-        # tref
         # reference time tref
-        c_t = dlfn.sqrt(mu/rho)  # c_t: Transversal-Wellengeschwindigkeit, zur Normierung der Zeit
-        tref = lref/c_t
-        self._tref = tref
+        if "rho" in kwargs.keys():
+            c_t = dlfn.sqrt(mu/rho)  # c_t: Transversal-Wellengeschwindigkeit, zur Normierung der Zeit
+            tref = lref/c_t
+            self._tref = tref
 # Ende ############################################################################
 
     def write_boundary_markers(self):
