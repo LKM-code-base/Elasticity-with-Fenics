@@ -249,13 +249,6 @@ class LinearElasticProblem(ProblemBase):
             assert isfinite(C)
             assert C > 0.0
             self._C = C
-            if "B" in kwargs.keys():
-                # 1st dimensionless coefficient for density
-                B = kwargs["B"]
-                assert isinstance(B, float)
-                assert isfinite(B)
-                assert B > 0.0
-                self._B = B
             # 3rd dimensionless coefficient for body force
             if "D" in kwargs.keys():
                 D = kwargs["D"]
@@ -273,35 +266,37 @@ class LinearElasticProblem(ProblemBase):
                 cleaned_kwargs.pop("lref")
             if "bref" in cleaned_kwargs.keys():
                 cleaned_kwargs.pop("bref")
-            if "tref" in cleaned_kwargs.keys():
-                cleaned_kwargs.pop("tref")
+            if "tend" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("tend")
             if "numsteps" in cleaned_kwargs.keys():
                 cleaned_kwargs.pop("numsteps")
             
             elastic_moduli = compute_elasticity_coefficients(**cleaned_kwargs)
             lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
+            self._lmbda = lmbda
             mu = elastic_moduli[ElasticModuli.ShearModulus]
+            self._mu = mu
             
             # 1st dimensionless coefficient
-            if "lref" in kwargs.keys() and "tref" in kwargs.keys() and "rho" in kwargs.keys():
+            if "lref" in kwargs.keys() and "tend" in kwargs.keys() and "rho" in kwargs.keys():
                 # reference length = length in x direction?
                 lref = kwargs["lref"]
                 assert isinstance(lref, float)
                 assert isfinite(lref)
                 assert lref > 0.0
                 self._lref = lref
-                # reference time = end time
-                tref = kwargs["tref"]
-                assert isinstance(tref, float)
-                assert isfinite(tref)
-                assert tref > 0.0
-                self._tref = tref
-                # reference value for density
+                # end time
+                tend = kwargs["tend"]
+                assert isinstance(tend, float)
+                assert isfinite(tend)
+                assert tend > 0.0
+                self._tend = tend
+                # density
                 rho = kwargs["rho"]
                 assert isinstance(rho, float)
                 assert isfinite(rho)
                 assert rho > 0.0
-                self._B = (rho * lref**2) / (mu * tref**2)
+                self._rho = rho
                 
             # 2nd dimensionless coefficient
             self._C = lmbda / mu
@@ -331,6 +326,12 @@ class LinearElasticProblem(ProblemBase):
             assert isfinite(numsteps)
             assert numsteps > 2  # due to backward 2. order scheme
             self._numsteps = numsteps
+            
+        # tref
+        # reference time tref
+        c_t = dlfn.sqrt(self._mu/self._rho)  # c_t: Transversal-Wellengeschwindigkeit, zur Normierung der Zeit
+        tref = lref/c_t
+        self._tref =tref
 # Ende ############################################################################
 
     def write_boundary_markers(self):
@@ -374,9 +375,7 @@ class LinearElasticProblem(ProblemBase):
         # setup parameters
         if not hasattr(self, "_C"):
             self.set_parameters()
-        if not hasattr(self, "_B"):
-            self.set_parameters()
-        if not hasattr(self, "_tref"):
+        if not hasattr(self, "_tend"):
             self.set_parameters()
         if not hasattr(self, "_lref"):
             self.set_parameters()
@@ -392,33 +391,43 @@ class LinearElasticProblem(ProblemBase):
         self._linear_elastic_solver.set_boundary_conditions(self._bcs)
 
         # pass dimensionless numbers
-        if hasattr(self, "_D"):
-            self._linear_elastic_solver.set_dimensionless_numbers_wave(self._C, self._B, self._lref, self._tref, self._numsteps, self._D)
-        else:
-            self._linear_elastic_solver.set_dimensionless_numbers_wave(self._C, self._B, self._lref, self._tref, self._numsteps)
+        self._linear_elastic_solver.set_dimensionless_numbers_wave(self._C, self._lref, self._tend, self._numsteps, self._lmbda, self._mu, self._rho)
 
         # pass body force
         if hasattr(self, "_body_force"):
             self._linear_elastic_solver.set_body_force(self._body_force)
 
         # time stepping
-        dt = self._tref / self._numsteps
+        dt = (self._tend/self._tref) / self._numsteps
         t = 0.0
-        for n in range(self._numsteps):
+        
+        # time step 1 and 2
+        uold_2, uold_1, uold_0 = self._linear_elastic_solver.solve_wave_1_2_iteration(dt)
+        
+        # postprocess solution
+        self.postprocess_solution()
+
+        # write XDMF-files
+        self._write_xdmf_file(current_time=t)
+        
+        # time step 3 to n
+        t = 2*dt
+        
+        for n in range(self._numsteps-2): # weil 2 Zeitschritte hard gecodet sind
             # solve problem
             t += dt
-            if self._D is not None:
-                dlfn.info("Solving problem with C = {0:.2f} and C = {1:.2f} and "
-                          "D = {2:0.2f}".format(self._B,self._C, self._D))
-            else:
-                dlfn.info("Solving problem with C = {0:.2f} and C = {1:.2f}".format(self._B,self._C))
-            self._linear_elastic_solver.solve_wave()
+            
+            dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
         
+            # time step
+            uold_2, uold_1, uold_0 = self._linear_elastic_solver.solve_wave_n_iteration(uold_2, uold_1, uold_0, dt)
+            
             # postprocess solution
             self.postprocess_solution()
 
             # write XDMF-files
             self._write_xdmf_file(current_time=t)
+            
 # Ende ############################################################################
 
     def solve_problem(self):

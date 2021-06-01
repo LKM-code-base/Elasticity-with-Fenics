@@ -111,14 +111,14 @@ def spherical_shell(dim, radii, n_refinements=0):
     return mesh, facet_marker
 
 
-def hyper_cube(dim, n_points=10):
+def hyper_cube(dim, r, n_points=10):
     assert isinstance(dim, int)
     assert dim == 2 or dim == 3
     assert isinstance(n_points, int) and n_points >= 0
 
     # mesh generation
     if dim == 2:
-        corner_points = (dlfn.Point(0., 0.), dlfn.Point(1., 1.))
+        corner_points = (dlfn.Point(0., 0.), dlfn.Point(1. , r))
         mesh = dlfn.RectangleMesh(*corner_points, n_points, n_points)
     else:
         corner_points = (dlfn.Point(0., 0., 0.), dlfn.Point(1., 1., 1.))
@@ -134,7 +134,7 @@ def hyper_cube(dim, n_points=10):
     gamma01 = dlfn.CompiledSubDomain("near(x[0], 0.0) && on_boundary")
     gamma02 = dlfn.CompiledSubDomain("near(x[0], 1.0) && on_boundary")
     gamma03 = dlfn.CompiledSubDomain("near(x[1], 0.0) && on_boundary")
-    gamma04 = dlfn.CompiledSubDomain("near(x[1], 1.0) && on_boundary")
+    gamma04 = dlfn.CompiledSubDomain("near(x[1], r) && on_boundary",r=r)
 
     gamma01.mark(facet_marker, BoundaryMarkers.left.value)
     gamma02.mark(facet_marker, BoundaryMarkers.right.value)

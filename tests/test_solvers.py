@@ -31,13 +31,19 @@ class WaveTest(LinearElasticProblem):
 
         if self._bc_type == "clamped":
             self._problem_name = "WaveTestClamped"
-
-        #self.set_parameters(E=210.0e3, nu=0.3, rho=0.00000785, lref=1.0, tref=1.0, numsteps=20)
-        self.set_parameters(E=1.0, nu=0.3, rho=0.5, lref=1.0, tref=2.0, numsteps=50)
-
+        
+        # Geometrie des Zylinders
+        L = 2.0
+        D = 0.5
+        self.r = D/L
+        
+        # Parameter-Eingabe
+        #self.set_parameters(E=210.0e9, nu=0.3, rho=7800.0, lref=L, tend=1.0, numsteps=10) # tref = lref/ct
+        self.set_parameters(E=1.0, nu=0.3, rho=0.5, lref=L, tend=10.0, numsteps=50) # tref = lref/ct
+        
     def setup_mesh(self):
         # create mesh
-        self._mesh, self._boundary_markers = hyper_cube(2, self._n_points)
+        self._mesh, self._boundary_markers = hyper_cube(2, self.r, self._n_points)
     
     def set_boundary_conditions(self):
         # boundary conditions
