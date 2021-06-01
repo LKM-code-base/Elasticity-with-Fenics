@@ -329,9 +329,9 @@ class LinearElasticProblem(ProblemBase):
             
         # tref
         # reference time tref
-        c_t = dlfn.sqrt(self._mu/self._rho)  # c_t: Transversal-Wellengeschwindigkeit, zur Normierung der Zeit
+        c_t = dlfn.sqrt(mu/rho)  # c_t: Transversal-Wellengeschwindigkeit, zur Normierung der Zeit
         tref = lref/c_t
-        self._tref =tref
+        self._tref = tref
 # Ende ############################################################################
 
     def write_boundary_markers(self):
