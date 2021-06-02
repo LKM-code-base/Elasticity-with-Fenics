@@ -6,7 +6,7 @@ import numpy as np
 
 
 class PointSubDomain(dlfn.SubDomain):
-    def __init__(self, coord, tol = 1e-12):
+    def __init__(self, coord, tol=1e-12):
         # input check
         assert isinstance(coord, (tuple, list))
         assert len(coord) > 1
