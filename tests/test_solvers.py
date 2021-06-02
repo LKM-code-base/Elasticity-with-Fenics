@@ -9,6 +9,7 @@ from elastic_solver import TractionBCType
 from elastic_law import Hooke, StVenantKirchhoff, NeoHooke
 import dolfin as dlfn
 import numpy as np
+import sympy as sp
 
 class TensileTest(CompressibleElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
@@ -261,6 +262,88 @@ class CylinderTest(CompressibleElasticProblem):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
 
+class DirichletTest(CompressibleElasticProblem):
+    def __init__(self, n_points, elastic_law, main_dir=None):
+        super().__init__(elastic_law, main_dir)
+
+        self._n_points = n_points
+        self._problem_name = "DirichletTest"
+
+        self.set_parameters(C=1.5, D = 1.)
+
+    def setup_mesh(self):
+        # create mesh
+        self._mesh, self._boundary_markers = hyper_cube(2, self._n_points)
+
+    def set_analytical_displacement(self):
+        self._u0 = 0.1
+        self._analytical_displacement = dlfn.Expression(
+                ("u0 * ((1 + x[0]) * pow(x[1],2) * \
+                pow(1 - x[1],2) * sin(2 * pi * x[0]) * cos(3 * pi * x[1]) \
+                + (4 * x[0] * x[1]) * (1 - x[1]))",
+                "u0 * (x[0] * (1 - x[0]) * sin (2 * pi * x[1]))"), u0=self._u0, degree=2
+        )
+        
+    def set_analytical_displacement_sympy(self):
+        if not hasattr(self, "_u0"):
+            self.set_analytical_displacement()
+
+        x, y = sp.symbols("x[0] x[1]")
+        self._coords = (x,y)
+        self._analytical_displacement_sympy = (self._u0 * ((1 + x) * pow(y,2) * pow((1 - y),2) * sp.sin(2 * sp.pi * x) \
+            * sp.cos(3 * sp.pi * y) + (4 * x * y) * (1 - y)), self._u0 * x * (1 - x) * sp.sin(2 * sp.pi * y))
+    
+    def set_body_force(self):
+        self.set_analytical_displacement_sympy()
+
+        def laplace_sympy(u):
+            temp = []
+            for i in range(len(u)):
+                temp.append(sum(sp.diff(u[i],coord,2) for coord in self._coords))
+            return np.array(temp)
+
+        def div_sympy(u):
+            return sum(sp.diff(u[i],self._coords[i]) for i in range(len(u)))
+
+        def grad_sympy(u):
+            gu = tuple(sp.diff(u,coord) for coord in self._coords)
+            return np.array(gu)
+
+        # compute body_force as a sympy expression:
+        body_force_sympy = -(self._C + 1) * grad_sympy(div_sympy(self._analytical_displacement_sympy)) - \
+            laplace_sympy(self._analytical_displacement_sympy)
+        
+        self._body_force = dlfn.Expression(
+            tuple(sp.printing.ccode(body_force_sympy[i]) for i in range(len(body_force_sympy))), degree=2
+        )
+
+    def set_displacement_right(self):
+        if not hasattr(self,"_u0"):
+            self.set_analytical_displacement()
+        
+        self._displacement_right = dlfn.Expression(
+            ("u0 * 4 * x[1] * (1 - x[1])","0"), u0 = self._u0, degree=2)
+
+    def set_boundary_conditions(self):
+        self.set_displacement_right()
+        # boundary conditions
+        self._bcs = [(DisplacementBCType.fixed, HyperCubeBoundaryMarkers.left.value, None),
+                     (DisplacementBCType.function, HyperCubeBoundaryMarkers.right.value, self._displacement_right),
+                     (DisplacementBCType.fixed, HyperCubeBoundaryMarkers.bottom.value, None),
+                     (DisplacementBCType.fixed, HyperCubeBoundaryMarkers.top.value, None)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i+1, j+1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+
 def test_tensile_test():
     for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
         tensile_test = TensileTest(25, Hooke(), bc_type=bc_type)
@@ -309,6 +392,11 @@ def test_cylinder():
     cylinder_test.solve_problem()
     print()
 
+def test_dirichlet():
+    dirichlet_test = DirichletTest(25, Hooke())
+    dirichlet_test.solve_problem()
+    print()
+
 
 if __name__ == "__main__":
     test_tensile_test()
@@ -316,3 +404,4 @@ if __name__ == "__main__":
     test_body_force()
     test_bc_function()
     test_cylinder()
+    test_dirichlet()
