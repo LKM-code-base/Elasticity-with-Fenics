@@ -29,12 +29,25 @@ class ElasticLaw:
 
 
 class Hooke(ElasticLaw):
+    """
+    Class to simulate linear elasticity with Hookes law.
+    """
+
     def __init__(self):
         super().__init__()
         self.linearity_type = "Linear"
         self.name = "Hooke"
 
     def dw_int(self, u, v):
+        """
+        Construct internal energy.
+
+        Parameters
+        ----------
+        u: TrialFunction
+
+        v: TestFunction
+        """
         # u TrialFunction (only in the linear case)
         assert isinstance(u, dlfn.function.argument.Argument)
         # v TestFunction
@@ -53,7 +66,14 @@ class Hooke(ElasticLaw):
         return inner(sigma, sym_grad(v))
 
     def postprocess_cauchy_stress(self, displacement):
+        """
+        Compute Cauchy stress from given numerical solution.
 
+        Parameters
+        ----------
+        displacement: Function
+            Computed numerical displacement
+        """
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
@@ -73,12 +93,25 @@ class Hooke(ElasticLaw):
 
 
 class StVenantKirchhoff(ElasticLaw):
+    """
+    Class to simulate nonlinear elasticity with Saint Vernant-Kirchhoff law.
+    """
+
     def __init__(self):
         super().__init__()
         self.linearity_type = "Nonlinear"
         self.name = "StVenantKirchhoff"
 
     def dw_int(self, u, v):
+        """
+        Construct internal energy.
+
+        Parameters
+        ----------
+        u: Function
+
+        v: TestFunction
+        """
         # u Function (in the nonlinear case)
         assert isinstance(u, dlfn.function.function.Function)
         # v TestFunction
@@ -103,7 +136,14 @@ class StVenantKirchhoff(ElasticLaw):
         return inner(S, dE)
 
     def postprocess_cauchy_stress(self, displacement):
+        """
+        Compute Cauchy stress from given numerical solution.
 
+        Parameters
+        ----------
+        displacement: Function
+            Computed numerical displacement
+        """
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
@@ -130,12 +170,26 @@ class StVenantKirchhoff(ElasticLaw):
 
 
 class NeoHooke(ElasticLaw):
+    """
+    Class to simulate nonlinear elasticity with Neo-Hooke law,
+    see Holzapfel p. 247.
+    """
+
     def __init__(self):
         super().__init__()
         self.linearity_type = "Nonlinear"
-        self.name = "NeoHooke"
+        self.name = "Neo-Hooke"
 
     def dw_int(self, u, v):
+        """
+        Construct internal energy.
+
+        Parameters
+        ----------
+        u: Function
+
+        v: TestFunction
+        """
         # u Function (in the nonlinear case)
         assert isinstance(u, dlfn.function.function.Function)
         # v TestFunction
@@ -158,7 +212,14 @@ class NeoHooke(ElasticLaw):
         return inner(S, dE)
 
     def postprocess_cauchy_stress(self, displacement):
+        """
+        Compute Cauchy stress from given numerical solution.
 
+        Parameters
+        ----------
+        displacement: Function
+            Computed numerical displacement
+        """
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 

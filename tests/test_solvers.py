@@ -6,7 +6,7 @@ from grid_generator import HyperCubeBoundaryMarkers, CylinderBoundaryMarkers
 from elastic_problem import CompressibleElasticProblem
 from elastic_solver import DisplacementBCType
 from elastic_solver import TractionBCType
-from elastic_law import Hooke, StVenantKirchhoff
+from elastic_law import Hooke, StVenantKirchhoff, NeoHooke
 import dolfin as dlfn
 import numpy as np
 import sympy as sp
@@ -395,49 +395,37 @@ class DirichletTest(CompressibleElasticProblem):
 
 
 def test_tensile_test():
-    for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
-        tensile_test = TensileTest(25, Hooke(), bc_type=bc_type)
-        print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
-        tensile_test .solve_problem()
-        print()
-
-    for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
-        tensile_test = TensileTest(25, StVenantKirchhoff(), bc_type=bc_type)
-        print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
-        tensile_test .solve_problem()
-        print()
+    for elastic_law in [Hooke(), StVenantKirchhoff(), NeoHooke()]:
+        for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
+            tensile_test = TensileTest(25, elastic_law, bc_type=bc_type)
+            print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
+            tensile_test.solve_problem()
+            print()
 
 
 def test_shear_test():
-    for bc_type in ("displacement", "traction"):
-        shear_test = ShearTest(25, Hooke(), bc_type=bc_type)
-        print(f"Running {shear_test._problem_name} with {bc_type} boundary condition type.")
-        shear_test.solve_problem()
-        print()
+    for elastic_law in [Hooke(), StVenantKirchhoff(), NeoHooke()]:
+        for bc_type in ("displacement", "traction"):
+            shear_test = ShearTest(25, elastic_law, bc_type=bc_type)
+            print(f"Running {shear_test._problem_name} with {bc_type} boundary condition type.")
+            shear_test.solve_problem()
+            print()
 
 
 def test_body_force():
-    body_force_test = BodyForceTest(25, Hooke())
-    print(f"Running {body_force_test._problem_name}.")
-    body_force_test.solve_problem()
-    print()
-
-    body_force_test = BodyForceTest(25, StVenantKirchhoff())
-    print(f"Running {body_force_test._problem_name}.")
-    body_force_test.solve_problem()
-    print()
+    for elastic_law in [Hooke(), StVenantKirchhoff(), NeoHooke()]:
+        body_force_test = BodyForceTest(25, elastic_law)
+        print(f"Running {body_force_test._problem_name}.")
+        body_force_test.solve_problem()
+        print()
 
 
 def test_bc_function():
-    bc_function_test = BCFunctionTest(25, Hooke())
-    print(f"Running {bc_function_test._problem_name}.")
-    bc_function_test.solve_problem()
-    print()
-
-    bc_function_test = BCFunctionTest(25, StVenantKirchhoff())
-    print(f"Running {bc_function_test._problem_name}.")
-    bc_function_test.solve_problem()
-    print()
+    for elastic_law in [Hooke(), StVenantKirchhoff()]:
+        bc_function_test = BCFunctionTest(25, elastic_law)
+        print(f"Running {bc_function_test._problem_name}.")
+        bc_function_test.solve_problem()
+        print()
 
 
 def test_cylinder():
@@ -447,30 +435,62 @@ def test_cylinder():
     print()
 
 
+def test_cylinder_iteration(dim=2, elastic_law=StVenantKirchhoff()):
+    displacements = np.linspace(-0.6, 2.0, num=10)
+    stresses = []
+
+    for displacement in displacements:
+
+        cylinder_test = CylinderTest(25, elastic_law, top_displacement=displacement, dim=dim)
+        print(f"Running {cylinder_test._problem_name} with top displacemt {cylinder_test._top_displacement}.")
+        cylinder_test.solve_problem()
+        print()
+
+        stress_tensor = cylinder_test._compute_stress_tensor()
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=cylinder_test._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(cylinder_test.space_dim):
+            for j in range(cylinder_test.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+        avg_stress = dlfn.assemble(stress_tensor[cylinder_test._space_dim - 1, cylinder_test._space_dim - 1] * dV) / V
+        stresses.append(avg_stress)
+
+    print("Displacements:")
+    print(displacements)
+    print("Avg. stress:")
+    print(stresses)
+
+
 def test_dirichlet():
-    errors = []
-    dofs = []
-    n_points = (10, 20, 30, 40)
-    for n in n_points:
-        dirichlet_test = DirichletTest(n, StVenantKirchhoff())
-        dirichlet_test.solve_problem()
-        dirichlet_test.set_analytical_displacement()
+    for elastic_law in (Hooke(), StVenantKirchhoff()):
+        errors = []
+        dofs = []
+        n_points = (10, 20, 30, 40)
+        for n in n_points:
+            dirichlet_test = DirichletTest(n, elastic_law)
+            dirichlet_test.solve_problem()
+            dirichlet_test.set_analytical_displacement()
 
-        u_ana = dlfn.project(
-            dirichlet_test._analytical_displacement, dirichlet_test._get_solver()._Vh
-        )
-
-        errors.append(
-            dlfn.errornorm(
-                u_ana, dirichlet_test._get_solver().solution,
-                'L2'
+            u_ana = dlfn.project(
+                dirichlet_test._analytical_displacement, dirichlet_test._get_solver()._Vh
             )
-        )
-        dofs.append(
-            dirichlet_test._get_solver()._Vh.dim()
-        )
-    [print(f'>>> With {dofs[i]} DoFs the error is {errors[i]}') for i in range(len(n_points))]
-    print()
+
+            errors.append(
+                dlfn.errornorm(
+                    u_ana, dirichlet_test._get_solver().solution,
+                    'L2'
+                )
+            )
+            dofs.append(
+                dirichlet_test._get_solver()._Vh.dim()
+            )
+        print(f'>>> Elastc law: {dirichlet_test._elastic_law.name}.')
+        [print(f'>>> With {dofs[i]} DoFs the error is {errors[i]}') for i in range(len(n_points))]
+        print()
 
 
 if __name__ == "__main__":
@@ -479,4 +499,5 @@ if __name__ == "__main__":
     test_body_force()
     test_bc_function()
     test_cylinder()
+    test_cylinder_iteration(dim=2, elastic_law=NeoHooke())
     test_dirichlet()
