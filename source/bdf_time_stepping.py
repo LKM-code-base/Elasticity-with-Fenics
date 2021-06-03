@@ -168,6 +168,10 @@ class BDFTimeStepping(DiscreteTime):
                 print(line)
         print("+-" + "-+-".join(n_columns * (12 * "-", )) + "-+")
 
+    @property
+    def order(self):
+        return self._order
+
     def coefficients(self, derivative):
         assert derivative in (1, 2)
         return tuple(self._alpha[derivative])
