@@ -1,50 +1,52 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from auxiliary_classes import PointSubDomain
 from grid_generator import hyper_cube
-from grid_generator import hyper_cuboid
+from grid_generator import hyper_rectangle
 from grid_generator import HyperCubeBoundaryMarkers as BoundaryMarkers
+from elastic_problem import LinearElasticWaveProblem
 from elastic_problem import LinearElasticProblem
 from elastic_solver import DisplacementBCType
 from elastic_solver import TractionBCType
 import dolfin as dlfn
+import numpy as np
 
 
-# Anfang ############################################################################
-class WaveTest(LinearElasticProblem):
-    # Initialisierung, hier werden folgendes deklariert:
-    # - n_points: number of points (Knotenanzahl in einer Richtung, fängt jedoch vom Knoten 0 an) --> Für ein Gebiet aus einem Quader ist es ausreichend
-    # - main_dir: Pfad
-    # - bc_type: Art von Randbedingungen, default-Einstellung ist "floating"
+class WaveTest(LinearElasticWaveProblem):
     def __init__(self, n_points, main_dir=None, bc_type="floating"):
-        super().__init__(main_dir)  # super() heißt, dass die Funktion __init__ die Variable main_dir von den höheren Klassenstufe vererbt bekommt (nicht so wichtig)
+        super().__init__(main_dir)  # super() means that the function __init__ inherits the variable main_dir from the parent / base class 
         
-        # Abfrage ob die Bedingungen für Knotenanzahl zutreffend sind
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
         
-        # Abfrage ob die Bedingungen für Art der Randbedingungen zutreffend sind
-        assert isinstance(bc_type, str)
-        # zunächst 1 R.B.:
-        # - clamped: Die linken und rechten Seiten des Klotzs werden fest eigespannt, die unteren und oberen Seiten werden in y-Richtung losgelagert 
+        assert isinstance(bc_type, str) 
         assert bc_type in ("clamped")
         self._bc_type = bc_type
 
         if self._bc_type == "clamped":
             self._problem_name = "WaveTestClamped"
         
-        # Geometrie des Zylinders
-        L = 2.0
-        D = 0.5
-        self.r = D/L
+        # Geometry of cylinder
+        self.L = 1.0      # length
+        self.D = 0.5      # diameter
+        self.r = self.D/self.L
+        
+        # Material Parameters
+        #E=210.0e9
+        #nu=0.3
+        #rho=7800.0
         
         # Parameter-Eingabe
-        #self.set_parameters(E=210.0e9, nu=0.3, rho=7800.0, lref=L, tend=1.0, numsteps=10) # tref = lref/ct
-        self.set_parameters(E=1.0, nu=0.3, rho=0.5, lref=L, tend=10.0, numsteps=50) # tref = lref/ct
+        self.set_parameters(E=1.0, nu=0.3, rho=5.0, lref=self.L, tend=5.0, numsteps=100) # tref = lref/ct
+        #self.set_parameters(E=210.0e9, nu=0.3, rho=7800.0, lref=self.L, tend=5.0, numsteps=100) # tref = lref/ct
+        #set parameters now gets self.lambda and self.mu , self.c_T and self.tref
+        
+        
         
     def setup_mesh(self):
         # create mesh
-        self._mesh, self._boundary_markers = hyper_cuboid(2, self.r, self._n_points)
+        self._mesh, self._boundary_markers = hyper_rectangle((0.0, 0.0), (1.0, self.r), self._n_points) #requieres input: first_point,second_point, n_points
     
     def set_boundary_conditions(self):
         # boundary conditions
@@ -74,28 +76,17 @@ class WaveTest(LinearElasticProblem):
             for j in range(self.space_dim):
                 avg_stress = dlfn.assemble(stress_tensor[i,j] * dV) / V
                 #print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
-# Ende ############################################################################
 
 
 class TensileTest(LinearElasticProblem):
-    # Initialisierung, hier werden folgendes deklariert:
-    # - n_points: number of points (Knotenanzahl in einer Richtung, fängt jedoch vom Knoten 0 an) --> Für ein Gebiet aus einem Quader ist es ausreichend
-    # - main_dir: Pfad
-    # - bc_type: Art von Randbedingungen, default-Einstellung ist "floating"
     def __init__(self, n_points, main_dir=None, bc_type="floating"):
-        super().__init__(main_dir)  # super() heißt, dass die Funktion __init__ die Variable main_dir von den höheren Klassenstufe vererbt bekommt (nicht so wichtig)
-        
-        # Abfrage ob die Bedingungen für Knotenanzahl zutreffend sind
+        super().__init__(main_dir)
+
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
-        
-        # Abfrage ob die Bedingungen für Art der Randbedingungen zutreffend sind
+
         assert isinstance(bc_type, str)
-        # zunächst 4 R.B.en: 
-        # - floating: linke Seite des Klotzs ist in x-Richtung fest, untere Seite des Klotzs ist in y-Richtung fest, rechte Seite wird in x-Richtung gezogen
-        # - clamped: linke Seite des Klotzs ist sowohl in x- als auch in y-Richtung fest (feste Einspannung), die rechte Seite wird mit der Verschiebung (0.1, 0.0) gezogen () 
-        # - clamped_free: 
         assert bc_type in ("floating", "clamped", "clamped_free", "pointwise")
         self._bc_type = bc_type
 
@@ -117,18 +108,23 @@ class TensileTest(LinearElasticProblem):
     def set_boundary_conditions(self):
         # boundary conditions
         self._bcs = []
+        BCType = DisplacementBCType
         if self._bc_type == "floating":
-            self._bcs.append((DisplacementBCType.fixed_component, BoundaryMarkers.left.value, 0, None))
-            self._bcs.append((DisplacementBCType.fixed_component, BoundaryMarkers.bottom.value, 1, None))
-            self._bcs.append((DisplacementBCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
+            self._bcs.append((BCType.fixed_component, BoundaryMarkers.left.value, 0, None))
+            self._bcs.append((BCType.fixed_component, BoundaryMarkers.bottom.value, 1, None))
+            self._bcs.append((BCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
         elif self._bc_type == "clamped":
-            self._bcs.append((DisplacementBCType.fixed, BoundaryMarkers.left.value, None))
-            self._bcs.append((DisplacementBCType.constant, BoundaryMarkers.right.value, (0.1, 0.0)))
+            self._bcs.append((BCType.fixed, BoundaryMarkers.left.value, None))
+            self._bcs.append((BCType.constant, BoundaryMarkers.right.value, (0.1, 0.0)))
         elif self._bc_type == "clamped_free":
-            self._bcs.append((DisplacementBCType.fixed, BoundaryMarkers.left.value, None))
-            self._bcs.append((DisplacementBCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
+            self._bcs.append((BCType.fixed, BoundaryMarkers.left.value, None))
+            self._bcs.append((BCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
         elif self._bc_type == "pointwise":
-            raise NotImplementedError()
+            gamma01 = PointSubDomain((0.0, ) * self._space_dim, tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[0], 0.0)")
+            self._bcs.append((BCType.fixed_pointwise, gamma01, None))
+            self._bcs.append((BCType.fixed_component_pointwise, gamma02, 0, None))
+            self._bcs.append((BCType.constant_component, BoundaryMarkers.right.value, 0, 0.1))
 
     def postprocess_solution(self):
         # compute stresses
@@ -147,7 +143,7 @@ class TensileTest(LinearElasticProblem):
         print("Volume-averaged stresses: ")
         for i in range(self.space_dim):
             for j in range(self.space_dim):
-                avg_stress = dlfn.assemble(stress_tensor[i,j] * dV) / V
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
@@ -158,7 +154,7 @@ class ShearTest(LinearElasticProblem):
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
-        
+
         assert isinstance(bc_type, str)
         assert bc_type in ("displacement", "traction")
         self._bc_type = bc_type
@@ -203,7 +199,7 @@ class ShearTest(LinearElasticProblem):
         print("Volume-averaged stresses: ")
         for i in range(self.space_dim):
             for j in range(self.space_dim):
-                avg_stress = dlfn.assemble(stress_tensor[i,j] * dV) / V
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
@@ -279,31 +275,35 @@ class BCFunctionTest(LinearElasticProblem):
             self._add_to_field_output(stress)
 
 
-def test_wave_test():
-    wave_test = WaveTest(n_points=25, bc_type="clamped")
-    wave_test.solve_wave_problem()
-
 def test_tensile_test():
-    for bc_type in ("floating", "clamped", "clamped_free"):
-        tensile_test = TensileTest(n_points=25, bc_type=bc_type)
-        tensile_test.solve_problem()
+    for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
+        tensile_test = TensileTest(25, bc_type=bc_type)
+        tensile_test .solve_problem()
 
 
 def test_shear_test():
     for bc_type in ("displacement", "traction"):
-        shear_test = ShearTest(n_points=25, bc_type=bc_type)
+        shear_test = ShearTest(25, bc_type=bc_type)
         shear_test.solve_problem()
 
 
 def test_body_force():
-    body_force_test = BodyForceTest(n_points=25)
+    body_force_test = BodyForceTest(25)
     body_force_test.solve_problem()
 
 
 def test_bc_function():
-    bc_function_test = BCFunctionTest(n_points=25)
+    bc_function_test = BCFunctionTest(25)
     bc_function_test.solve_problem()
 
+    
+def test_wave_test():
+    wave_test = WaveTest(n_points=50, bc_type="clamped")
+    wave_test.solve_wave_problem()    
 
 if __name__ == "__main__":
+  #  test_tensile_test()
+  #  test_shear_test()
+  #  test_body_force()
+  #  test_bc_function()
     test_wave_test()
