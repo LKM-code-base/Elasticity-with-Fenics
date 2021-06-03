@@ -6,19 +6,20 @@ from grid_generator import HyperCubeBoundaryMarkers, CylinderBoundaryMarkers
 from elastic_problem import CompressibleElasticProblem
 from elastic_solver import DisplacementBCType
 from elastic_solver import TractionBCType
-from elastic_law import Hooke, StVenantKirchhoff, NeoHooke
+from elastic_law import Hooke, StVenantKirchhoff
 import dolfin as dlfn
 import numpy as np
 import sympy as sp
 
+
 class TensileTest(CompressibleElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
         super().__init__(elastic_law, main_dir)
-        
+
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
-        
+
         assert isinstance(bc_type, str)
         assert bc_type in ("floating", "clamped", "clamped_free", "pointwise")
         self._bc_type = bc_type
@@ -66,7 +67,7 @@ class TensileTest(CompressibleElasticProblem):
         component_indices = []
         for i in range(self.space_dim):
             for j in range(i, self.space_dim):
-                component_indices.append((i+1, j+1))
+                component_indices.append((i + 1, j + 1))
         for k, stress in enumerate(stress_tensor.split()):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
@@ -76,7 +77,7 @@ class TensileTest(CompressibleElasticProblem):
         print("Volume-averaged stresses: ")
         for i in range(self.space_dim):
             for j in range(self.space_dim):
-                avg_stress = dlfn.assemble(stress_tensor[i,j] * dV) / V
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
@@ -87,7 +88,7 @@ class ShearTest(CompressibleElasticProblem):
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
-        
+
         assert isinstance(bc_type, str)
         assert bc_type in ("displacement", "traction")
         self._bc_type = bc_type
@@ -122,7 +123,7 @@ class ShearTest(CompressibleElasticProblem):
         component_indices = []
         for i in range(self.space_dim):
             for j in range(i, self.space_dim):
-                component_indices.append((i+1, j+1))
+                component_indices.append((i + 1, j + 1))
         for k, stress in enumerate(stress_tensor.split()):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
@@ -132,7 +133,7 @@ class ShearTest(CompressibleElasticProblem):
         print("Volume-averaged stresses: ")
         for i in range(self.space_dim):
             for j in range(self.space_dim):
-                avg_stress = dlfn.assemble(stress_tensor[i,j] * dV) / V
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
@@ -151,8 +152,8 @@ class BodyForceTest(CompressibleElasticProblem):
 
     def set_body_force(self):
         self._body_force = dlfn.Expression(
-                ("x[0]*x[0] * (1.0 - x[0]*x[0]) * x[1]",
-                 "x[1]*x[1] * (1.0 - x[1]*x[1]) * x[0]"), degree=2)
+            ("x[0]*x[0] * (1.0 - x[0]*x[0]) * x[1]",
+             "x[1]*x[1] * (1.0 - x[1]*x[1]) * x[0]"), degree=2)
 
     def set_boundary_conditions(self):
         # boundary conditions
@@ -168,7 +169,7 @@ class BodyForceTest(CompressibleElasticProblem):
         component_indices = []
         for i in range(self.space_dim):
             for j in range(i, self.space_dim):
-                component_indices.append((i+1, j+1))
+                component_indices.append((i + 1, j + 1))
         for k, stress in enumerate(stress_tensor.split()):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
@@ -202,20 +203,21 @@ class BCFunctionTest(CompressibleElasticProblem):
         component_indices = []
         for i in range(self.space_dim):
             for j in range(i, self.space_dim):
-                component_indices.append((i+1, j+1))
+                component_indices.append((i + 1, j + 1))
         for k, stress in enumerate(stress_tensor.split()):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
 
+
 class CylinderTest(CompressibleElasticProblem):
-    def __init__(self, n_points, elastic_law, top_displacement = 0.1, dim = 3, main_dir=None):
+    def __init__(self, n_points, elastic_law, top_displacement=0.1, dim=3, main_dir=None):
         super().__init__(elastic_law, main_dir)
-        
+
         assert isinstance(dim, int)
         self._space_dim = dim
 
         self._n_points = n_points
-        self._problem_name = f"CylinderTest"
+        self._problem_name = "CylinderTest"
 
         self.set_parameters(E=210.0, nu=0.3)
 
@@ -225,30 +227,30 @@ class CylinderTest(CompressibleElasticProblem):
         # create mesh
         if self._space_dim == 2:
             self._mesh, self._boundary_markers = cylinder(self._space_dim, (0.1, 0.1), 1.0, 4)
-        elif self._space_dim ==3:
+        elif self._space_dim == 3:
             self._mesh, self._boundary_markers = cylinder(self._space_dim, (0.1, 0.1), 1.0, 1)
 
     def set_boundary_conditions(self):
-        
+
         if self._space_dim == 2:
             # boundary conditions
             gamma01 = PointSubDomain((0.0, 0.0), tol=1e-10)
             gamma02 = dlfn.CompiledSubDomain("near(x[1], 0.0)")
-            
+
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
-                        (DisplacementBCType.fixed_component_pointwise, gamma02, 1, None),
-                        (DisplacementBCType.constant_component, CylinderBoundaryMarkers.top.value, 1, self._top_displacement)]
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 1, None),
+                         (DisplacementBCType.constant_component, CylinderBoundaryMarkers.top.value, 1, self._top_displacement)]
 
         if self._space_dim == 3:
             # boundary conditions
             gamma01 = PointSubDomain((0.0, 0.0, 0.0), tol=1e-10)
             gamma02 = dlfn.CompiledSubDomain("near(x[2], 0.0)")
             gamma03 = PointSubDomain((0.0, 0.1, 0.0), tol=1e-10)
-            
+
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
-                        (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
-                        (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
-                        (DisplacementBCType.constant_component, CylinderBoundaryMarkers.top.value, 2, self._top_displacement)]
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
+                         (DisplacementBCType.constant_component, CylinderBoundaryMarkers.top.value, 2, self._top_displacement)]
 
     def postprocess_solution(self):
         # compute stresses
@@ -257,10 +259,11 @@ class CylinderTest(CompressibleElasticProblem):
         component_indices = []
         for i in range(self.space_dim):
             for j in range(i, self.space_dim):
-                component_indices.append((i+1, j+1))
+                component_indices.append((i + 1, j + 1))
         for k, stress in enumerate(stress_tensor.split()):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
+
 
 class DirichletTest(CompressibleElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
@@ -269,7 +272,7 @@ class DirichletTest(CompressibleElasticProblem):
         self._n_points = n_points
         self._problem_name = "DirichletTest"
 
-        self.set_parameters(C=1.5, D = 1.)
+        self.set_parameters(C=1.5, D=1.)
 
     def setup_mesh(self):
         # create mesh
@@ -278,51 +281,97 @@ class DirichletTest(CompressibleElasticProblem):
     def set_analytical_displacement(self):
         self._u0 = 0.1
         self._analytical_displacement = dlfn.Expression(
-                ("u0 * ((1 + x[0]) * pow(x[1],2) * \
-                pow(1 - x[1],2) * sin(2 * pi * x[0]) * cos(3 * pi * x[1]) \
+            ("u0 * ((1 + x[0]) * pow(x[1],2) * pow(1 - x[1],2) \
+             * sin(2 * pi * x[0]) * cos(3 * pi * x[1]) \
                 + (4 * x[0] * x[1]) * (1 - x[1]))",
-                "u0 * (x[0] * (1 - x[0]) * sin (2 * pi * x[1]))"), u0=self._u0, degree=2
+                "u0 * (x[0] * (1 - x[0]) * sin (2 * pi * x[1]))"),
+            u0=self._u0, degree=2
         )
-        
+
     def set_analytical_displacement_sympy(self):
         if not hasattr(self, "_u0"):
             self.set_analytical_displacement()
 
         x, y = sp.symbols("x[0] x[1]")
-        self._coords = (x,y)
-        self._analytical_displacement_sympy = (self._u0 * ((1 + x) * pow(y,2) * pow((1 - y),2) * sp.sin(2 * sp.pi * x) \
-            * sp.cos(3 * sp.pi * y) + (4 * x * y) * (1 - y)), self._u0 * x * (1 - x) * sp.sin(2 * sp.pi * y))
-    
+        self._coords = (x, y)
+        self._analytical_displacement_sympy = (self._u0 * ((1 + x) * pow(y, 2) * pow((1 - y), 2)
+                                               * sp.sin(2 * sp.pi * x) * sp.cos(3 * sp.pi * y)
+                                               + (4 * x * y) * (1 - y)),
+                                               self._u0 * x * (1 - x) * sp.sin(2 * sp.pi * y))
+
     def set_body_force(self):
         self.set_analytical_displacement_sympy()
 
         def laplace_sympy(u):
             temp = []
             for i in range(len(u)):
-                temp.append(sum(sp.diff(u[i],coord,2) for coord in self._coords))
+                temp.append(sum(sp.diff(u[i], coord, 2) for coord in self._coords))
             return np.array(temp)
 
         def div_sympy(u):
-            return sum(sp.diff(u[i],self._coords[i]) for i in range(len(u)))
+            if np.size(u) == 2:  # u is a tensor of first order
+                return sum(sp.diff(u[i], self._coords[i]) for i in range(len(u)))
+            elif np.size(u) == self._space_dim**2:  # u is a tensor of second order
+                return np.array(
+                    tuple(
+                        sum(sp.diff(u[i, j], self._coords[j]) for j in range(len(self._coords))) for i in range(len(u[0, :]))
+                    )
+                )
 
         def grad_sympy(u):
-            gu = tuple(sp.diff(u,coord) for coord in self._coords)
+            if np.size(u) == 1:  # u is a scalar
+                gu = tuple(
+                    sp.diff(u, coord) for coord in self._coords
+                )
+            elif np.size(u) == self._space_dim:  # u is a tensor of first order
+                assert isinstance(
+                    u, (tuple, list, np.ndarray)
+                )
+                gu = tuple(
+                    tuple(
+                        sp.diff(u[i], coord) for coord in self._coords) for i in range(len(u))
+                )
+            elif np.size(u) == self._space_dim**2:  # u is a tensor of second order
+                gu = tuple(
+                    tuple(
+                        tuple(
+                            sp.diff(u[i, j], coord) for coord in self._coords) for j in range(len(u[0, :]))) for i in range(len(u[0, :]))
+                )
             return np.array(gu)
 
         # compute body_force as a sympy expression:
-        body_force_sympy = -(self._C + 1) * grad_sympy(div_sympy(self._analytical_displacement_sympy)) - \
-            laplace_sympy(self._analytical_displacement_sympy)
-        
-        self._body_force = dlfn.Expression(
-            tuple(sp.printing.ccode(body_force_sympy[i]) for i in range(len(body_force_sympy))), degree=2
-        )
+        if self._elastic_law.name == "Hooke":
+            body_force_sympy = -(self._C + 1) * grad_sympy(div_sympy(self._analytical_displacement_sympy)) - \
+                laplace_sympy(self._analytical_displacement_sympy)
+
+            self._body_force = dlfn.Expression(
+                tuple(sp.printing.ccode(body_force_sympy[i]) for i in range(len(body_force_sympy))), degree=2
+            )
+
+        elif self._elastic_law.name == "StVenantKirchhoff":
+            EYE = sp.eye(self._space_dim)
+            u = self._analytical_displacement_sympy
+            H = grad_sympy(u)
+            body_force_sympy = - np.tensordot(
+                EYE + grad_sympy(u),
+                self._C * (grad_sympy(div_sympy(u)) + 1 / 2 * grad_sympy(np.trace(np.tensordot(H, H.T, axes=1))))
+                + (div_sympy(H) + div_sympy(H.T) + div_sympy(np.tensordot(H.T, H, axes=1))), axes=1)\
+                - np.tensordot(grad_sympy(H), self._C
+                               * (div_sympy(u) + 1 / 2 * np.tensordot(H, H)) * EYE + (H + H.T + np.tensordot(H.T, H, axes=1)), axes=2)
+
+            self._body_force = dlfn.Expression(
+                tuple(sp.printing.ccode(body_force_sympy[i]) for i in range(len(body_force_sympy))),
+                degree=2
+            )
 
     def set_displacement_right(self):
-        if not hasattr(self,"_u0"):
+        if not hasattr(self, "_u0"):
             self.set_analytical_displacement()
-        
+
         self._displacement_right = dlfn.Expression(
-            ("u0 * 4 * x[1] * (1 - x[1])","0"), u0 = self._u0, degree=2)
+            ("u0 * 4 * x[1] * (1 - x[1])", "0"), u0=self._u0,
+            degree=2
+        )
 
     def set_boundary_conditions(self):
         self.set_displacement_right()
@@ -339,10 +388,11 @@ class DirichletTest(CompressibleElasticProblem):
         component_indices = []
         for i in range(self.space_dim):
             for j in range(i, self.space_dim):
-                component_indices.append((i+1, j+1))
+                component_indices.append((i + 1, j + 1))
         for k, stress in enumerate(stress_tensor.split()):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
+
 
 def test_tensile_test():
     for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
@@ -350,12 +400,13 @@ def test_tensile_test():
         print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
         tensile_test .solve_problem()
         print()
-    
+
     for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
         tensile_test = TensileTest(25, StVenantKirchhoff(), bc_type=bc_type)
         print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
         tensile_test .solve_problem()
         print()
+
 
 def test_shear_test():
     for bc_type in ("displacement", "traction"):
@@ -363,7 +414,8 @@ def test_shear_test():
         print(f"Running {shear_test._problem_name} with {bc_type} boundary condition type.")
         shear_test.solve_problem()
         print()
-    
+
+
 def test_body_force():
     body_force_test = BodyForceTest(25, Hooke())
     print(f"Running {body_force_test._problem_name}.")
@@ -374,6 +426,7 @@ def test_body_force():
     print(f"Running {body_force_test._problem_name}.")
     body_force_test.solve_problem()
     print()
+
 
 def test_bc_function():
     bc_function_test = BCFunctionTest(25, Hooke())
@@ -386,15 +439,37 @@ def test_bc_function():
     bc_function_test.solve_problem()
     print()
 
+
 def test_cylinder():
-    cylinder_test = CylinderTest(25, StVenantKirchhoff(), top_displacement = -0.1, dim = 2)
+    cylinder_test = CylinderTest(25, StVenantKirchhoff(), top_displacement=-0.1, dim=2)
     print(f"Running {cylinder_test._problem_name} with top displacemt {cylinder_test._top_displacement}.")
     cylinder_test.solve_problem()
     print()
 
+
 def test_dirichlet():
-    dirichlet_test = DirichletTest(25, Hooke())
-    dirichlet_test.solve_problem()
+    errors = []
+    dofs = []
+    n_points = (10, 20, 30, 40)
+    for n in n_points:
+        dirichlet_test = DirichletTest(n, StVenantKirchhoff())
+        dirichlet_test.solve_problem()
+        dirichlet_test.set_analytical_displacement()
+
+        u_ana = dlfn.project(
+            dirichlet_test._analytical_displacement, dirichlet_test._get_solver()._Vh
+        )
+
+        errors.append(
+            dlfn.errornorm(
+                u_ana, dirichlet_test._get_solver().solution,
+                'L2'
+            )
+        )
+        dofs.append(
+            dirichlet_test._get_solver()._Vh.dim()
+        )
+    [print(f'>>> With {dofs[i]} DoFs the error is {errors[i]}') for i in range(len(n_points))]
     print()
 
 

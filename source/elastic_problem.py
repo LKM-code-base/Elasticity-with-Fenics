@@ -9,15 +9,16 @@ from auxiliary_methods import ElasticModuli
 from elastic_solver import CompressibleElasticitySolver
 from elastic_law import ElasticLaw
 
+
 class ProblemBase:
     _suffix = ".xdmf"
 
     def __init__(self, elastic_law, main_dir=None):
-        
-        #set elastic law
+
+        # set elastic law
         assert isinstance(elastic_law, ElasticLaw)
         self._elastic_law = elastic_law
-        
+
         # set write and read directory
         if main_dir is None:
             self._main_dir = os.getcwd()
@@ -26,8 +27,8 @@ class ProblemBase:
             assert path.exist(main_dir)
             self._main_dir = main_dir
 
-        assert hasattr(elastic_law,"linearity_type")
-        assert hasattr(elastic_law,"name")
+        assert hasattr(elastic_law, "linearity_type")
+        assert hasattr(elastic_law, "name")
 
         self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law.name}")
 
@@ -183,6 +184,7 @@ class CompressibleElasticProblem(ProblemBase):
     maxiter: int (optional)
         Maximum number of iterations in total.
     """
+
     def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
         """
         Constructor of the class.
@@ -203,7 +205,7 @@ class CompressibleElasticProblem(ProblemBase):
         """
         assert hasattr(self, "_C")
         solver = self._get_solver()
-        
+
         # displacement vector
         displacement = solver.solution
 

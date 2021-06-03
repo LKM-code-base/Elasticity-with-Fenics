@@ -47,6 +47,7 @@ class HyperSimplexBoundaryMarkers(Enum):
     # only used in 3D
     back = auto()
 
+
 class CylinderBoundaryMarkers(Enum):
     """
     Simple enumeration to identify the boundaries of a cylinder uniquely.
@@ -54,6 +55,7 @@ class CylinderBoundaryMarkers(Enum):
     top = auto()
     bottom = auto()
     side = auto()
+
 
 class CircularBoundary(dlfn.SubDomain):
     def __init__(self, **kwargs):
@@ -69,6 +71,7 @@ class CircularBoundary(dlfn.SubDomain):
         result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius) < tol
         return result and on_boundary
 
+
 class CylinderBoundary(dlfn.SubDomain):
     def __init__(self, **kwargs):
         super().__init__()
@@ -81,10 +84,11 @@ class CylinderBoundary(dlfn.SubDomain):
         # tolerance: half length of smallest element
         tol = self._hmin / 2.
         if self._space_dim == 2:
-            result = abs(math.sqrt(x[0]**2)- self._radius(x[1])) < tol
+            result = abs(math.sqrt(x[0] ** 2) - self._radius(x[1])) < tol
         elif self._space_dim == 3:
             result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius(x[2])) < tol
         return result and on_boundary
+
 
 def spherical_shell(dim, radii, n_refinements=0):
     """
@@ -108,12 +112,12 @@ def spherical_shell(dim, radii, n_refinements=0):
         center = dlfn.Point(0., 0., 0.)
 
     if dim == 2:
-        domain = Circle(center, ro) \
-               - Circle(center, ri)
+        domain = Circle(center, ro)\
+            - Circle(center, ri)
         mesh = generate_mesh(domain, 75)
     elif dim == 3:
         domain = Sphere(center, ro) \
-               - Sphere(center, ri)
+            - Sphere(center, ri)
         mesh = generate_mesh(domain, 15)
 
     # mesh refinement
@@ -215,6 +219,7 @@ def hyper_simplex(dim, n_refinements=0):
 
     return mesh, facet_marker
 
+
 def cylinder(dim, radii, height, n_refinements=0):
     """
     Creates the mesh of a cylinder using the mshr module.
@@ -227,7 +232,7 @@ def cylinder(dim, radii, height, n_refinements=0):
     assert isinstance(rb, float) and rb > 0.
     assert isinstance(rt, float) and rt > 0.
 
-    assert isinstance(height,float) and height > 0.
+    assert isinstance(height, float) and height > 0.
 
     assert isinstance(n_refinements, int) and n_refinements >= 0
 
@@ -240,15 +245,17 @@ def cylinder(dim, radii, height, n_refinements=0):
         top = dlfn.Point(0., 0., height)
 
     if dim == 2:
-        domain = Polygon([ dlfn.Point(-rb/2., 0.),
-                           bottom,
-                           dlfn.Point(rb/2., 0.),
-                           dlfn.Point(rt/2., height),
-                           top,
-                           dlfn.Point(-rt/2.,height)])
+        domain = Polygon([
+            dlfn.Point(-rb / 2., 0.),
+            bottom,
+            dlfn.Point(rb / 2., 0.),
+            dlfn.Point(rt / 2., height),
+            top,
+            dlfn.Point(-rt / 2., height)
+        ])
         mesh = generate_mesh(domain, 10)
     elif dim == 3:
-        domain = Cylinder(top, bottom, rt, rb, segments = 100)
+        domain = Cylinder(top, bottom, rt, rb, segments=100)
         mesh = generate_mesh(domain, 32)
 
     # mesh refinement
@@ -260,21 +267,21 @@ def cylinder(dim, radii, height, n_refinements=0):
     facet_marker.set_all(0)
 
     # calculate radius depending on the x[3] coordinate
-    radius = lambda z: rb + z * (rt - rb)/height
-
+    def radius(z):
+        return rb + z * (rt - rb) / height
     # mark boundaries
     BoundaryMarkers = CylinderBoundaryMarkers
-    
-    gamma_side = CylinderBoundary(mesh = mesh, radius = radius)
+
+    gamma_side = CylinderBoundary(mesh=mesh, radius=radius)
     gamma_side.mark(facet_marker, BoundaryMarkers.side.value)
 
     if dim == 2:
-        gamma_top = dlfn.CompiledSubDomain("near(x[1], height) && on_boundary", height = height)
+        gamma_top = dlfn.CompiledSubDomain("near(x[1], height) && on_boundary", height=height)
         gamma_top.mark(facet_marker, BoundaryMarkers.top.value)
         gamma_bottom = dlfn.CompiledSubDomain("near(x[1], 0.0) && on_boundary")
         gamma_bottom.mark(facet_marker, BoundaryMarkers.bottom.value)
     elif dim == 3:
-        gamma_top = dlfn.CompiledSubDomain("near(x[2], height) && on_boundary", height = height)
+        gamma_top = dlfn.CompiledSubDomain("near(x[2], height) && on_boundary", height=height)
         gamma_top.mark(facet_marker, BoundaryMarkers.top.value)
         gamma_bottom = dlfn.CompiledSubDomain("near(x[2], 0.0) && on_boundary")
         gamma_bottom.mark(facet_marker, BoundaryMarkers.bottom.value)
