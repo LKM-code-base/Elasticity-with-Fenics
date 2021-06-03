@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-from enum import Enum, auto
 from discrete_time import DiscreteTime
 import math
 
@@ -146,9 +144,9 @@ class BDFTimeStepping(DiscreteTime):
         levels = ("n + 1", "n", "n - 1", "n - 2")
         n_levels = 2 + self._order
         n_columns = n_levels + 1
-        print("+-" + "-+-".join( n_columns * (12 * "-", )) + "-+")
+        print("+-" + "-+-".join(n_columns * (12 * "-", )) + "-+")
         print(("| {:12} | " + " | ".join(n_levels * ("{:12}", )))
-              .format("derivative", *levels[:n_levels]) + " |" )
+              .format("derivative", *levels[:n_levels]) + " |")
         for d, coeffs in self._alpha.items():
             if d == 1:
                 d_str = "1st"

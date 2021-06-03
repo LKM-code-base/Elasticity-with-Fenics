@@ -88,6 +88,7 @@ def test_first_order():
     assert len(alpha[2]) == len(step_sizes)
     time_loop(time_stepping, alpha, coefficients_changed)
 
+
 def test_second_order():
     coefficients_changed = {1: [True, True, True, True, True, True, False],
                             2: [True, True, True, True, True, True, True]}
@@ -114,5 +115,5 @@ def test_second_order():
 
 
 if __name__ == "__main__":
-#    test_first_order()
+    test_first_order()
     test_second_order()
