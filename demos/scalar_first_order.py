@@ -20,7 +20,7 @@ class PeriodicBoundary(SubDomain):
 
 
 # Initialize time stepping coefficients
-alpha = [Constant(0.0), Constant(0.0), Constant(0.0)]
+alpha = [Constant(0.0), Constant(0.0)]
 next_step_size = Constant(0.0)
 
 
@@ -30,7 +30,7 @@ def update_time_stepping_coefficients():
     # Update time step
     next_step_size.assign(time_stepping.get_next_step_size())
     # Update coefficients
-    coefficients = time_stepping.coefficients(derivative=2)
+    coefficients = time_stepping.coefficients(derivative=1)
     for i in range(len(coefficients)):
         alpha[i].assign(coefficients[i])
 
@@ -40,19 +40,18 @@ update_time_stepping_coefficients()
 
 # Create mesh and define function space
 mesh = UnitSquareMesh(128, 128)
-V = FunctionSpace(mesh, "Lagrange", 1,
-                  constrained_domain=PeriodicBoundary())
+cell = mesh.ufl_cell()
+element = FiniteElement("CG", cell, 1)
+mixed_element = MixedElement([element, element])
+V = FunctionSpace(mesh, mixed_element, constrained_domain=PeriodicBoundary())
 # Define solution
 solution = Function(V)
-solution.rename("displacement", "")
 old_solution = Function(V)
-old_old_solution = Function(V)
 
 
 # Auxiliary methods
 def advance_solution():
     """Advance solution objects in time."""
-    old_old_solution.assign(old_solution)
     old_solution.assign(solution)
 
 
@@ -67,26 +66,43 @@ def advance_solution():
 function_string = "exp(-pow(x[1] - y0, 2) / a)"
 initial_field = Expression(function_string, y0=0.5, a=0.01, degree=3)
 initial_velocity = Constant(0.0)
+
+
 # Project initial condition
-old_solution.assign(project(initial_field, V))
-solution.assign(old_solution)
-if time_stepping.coefficients(derivative=2)[0] != 0.0:
-    beta = time_stepping.coefficients(derivative=1)
-    assert(beta[1] != 0.0)
-    old_old_solution_expr = (next_step_size * initial_velocity - Constant(beta[0]) * old_solution) / Constant(beta[1])
-    old_old_solution.assign(project(old_old_solution_expr, V))
+def project_initial_conditions():
+    old_u_solution, old_v_solution = old_solution.split()
+    # displacement
+    Vaux = FunctionSpace(mesh, V.sub(0).ufl_element(),
+                         constrained_domain=PeriodicBoundary())
+    projected_initial_field = project(initial_field, Vaux)
+    assign(old_u_solution, projected_initial_field)
+    # velocity
+    Vaux = FunctionSpace(mesh, V.sub(1).ufl_element(),
+                         constrained_domain=PeriodicBoundary())
+    projected_initial_velocity = project(initial_velocity, Vaux)
+    assign(old_v_solution, projected_initial_velocity)
+    solution.assign(old_solution)
+
+
+project_initial_conditions()
+
 # Define variational problem
-u = TrialFunction(V)
-v = TestFunction(V)
-a = (alpha[0] / next_step_size**2 * u * v + inner(grad(u), grad(v))) * dx
-L = (-alpha[1] * old_solution - alpha[2] * old_old_solution) / next_step_size**2 * v * dx
+(u, v) = TrialFunctions(V)
+(du, dv) = TestFunctions(V)
+old_u_solution, old_v_solution = split(old_solution)
+a = (alpha[0] / next_step_size * (u * du + v * dv) - v * du + inner(grad(u), grad(dv))) * dx
+L = -alpha[1] / next_step_size * (old_v_solution * dv + old_u_solution * du) * dx
 # XDMF file for saving the solution
 file = XDMFFile("wave.xdmf")
 file.parameters["flush_output"] = True
 file.parameters["functions_share_mesh"] = True
 file.parameters["rewrite_function_mesh"] = False
+u_solution, v_solution = solution.split()
+u_solution.rename("displacement", "")
+v_solution.rename("velocity", "")
 # Write initial condition
-file.write(solution, time_stepping.current_time)
+file.write(u_solution, time_stepping.current_time)
+file.write(v_solution, time_stepping.current_time)
 # Simple time loop
 n_max_steps = 1000
 while not time_stepping.is_at_end() and time_stepping.step_number < n_max_steps:
@@ -103,5 +119,6 @@ while not time_stepping.is_at_end() and time_stepping.step_number < n_max_steps:
     time_stepping.advance_time()
     advance_solution()
     # Write XDMF-files
-    file.write(solution, time_stepping.current_time)
+    file.write(u_solution, time_stepping.current_time)
+    file.write(v_solution, time_stepping.current_time)
 print(time_stepping)
