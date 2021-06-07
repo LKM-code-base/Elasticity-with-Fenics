@@ -141,8 +141,14 @@ class CompressibleElasticitySolver(SolverBase):
     _field_association = {value: key for key, value in _sub_space_association.items()}
     _null_scalar = dlfn.Constant(0.)
 
-    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
+    def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1, **kwargs):
         super().__init__(mesh, boundary_markers, elastic_law, polynomial_degree)
+
+        if "goal_functional" in kwargs.keys():
+            # 1st dimensionless coefficient
+            goal_functional = kwargs["goal_functional"]
+            assert isinstance(goal_functional, str)
+            self._goal_functional = goal_functional
 
     def _check_boundary_condition_format(self, bc):
         """
@@ -443,11 +449,20 @@ class CompressibleElasticitySolver(SolverBase):
         self._Form = self._dw_int - self._dw_ext
         self._J_newton = dlfn.derivative(self._Form, self._solution)
         self._problem = dlfn.NonlinearVariationalProblem(self._Form,
-                                                            self._solution,
-                                                            self._dirichlet_bcs,
-                                                            J=self._J_newton)
-        # setup nonlinear variational solver
-        self._solver = dlfn.NonlinearVariationalSolver(self._problem)
+                                                         self._solution,
+                                                         self._dirichlet_bcs,
+                                                         J=self._J_newton)
+
+        if hasattr(self, "_goal_functional"):
+            dlfn.parameters["refinement_algorithm"] = "plaza_with_parent_facets"
+            goal_functional = eval(self._goal_functional)
+            # setup adpative nonlinear variational solver
+            self._solver = dlfn.AdaptiveNonlinearVariationalSolver(self._problem, goal_functional)
+            self._solver.parameters["error_control"]["dual_variational_solver"]["linear_solver"] = "gmres"
+            self._solver.parameters["error_control"]["dual_variational_solver"]["preconditioner"] = "amg"
+        else:
+            # setup nonlinear variational solver
+            self._solver = dlfn.NonlinearVariationalSolver(self._problem)
 
     def solve(self):
         """
@@ -462,7 +477,12 @@ class CompressibleElasticitySolver(SolverBase):
             self._setup_problem()
 
         dlfn.info("Starting solution of elastic problem...")
-        self._solver.solve()
+        if hasattr(self, "_goal_functional"):
+            self._solver.solve(1e-4)
+            self._solver.summary()
+            self._solution = self._solution.leaf_node()
+        else:
+            self._solver.solve()
 
 
 class IncompressibleElasticitySolver(SolverBase):

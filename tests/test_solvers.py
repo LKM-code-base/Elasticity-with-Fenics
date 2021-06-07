@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from auxiliary_classes import PointSubDomain
-from grid_generator import hyper_cube, cylinder
+from grid_generator import hyper_cube, cylinder, hyper_rectangle
 from grid_generator import HyperCubeBoundaryMarkers, CylinderBoundaryMarkers
 from elastic_problem import CompressibleElasticProblem
 from elastic_solver import DisplacementBCType
@@ -15,7 +15,6 @@ import sympy as sp
 class TensileTest(CompressibleElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
         super().__init__(elastic_law, main_dir)
-
 
         assert isinstance(n_points, int)
         assert n_points > 0
@@ -395,6 +394,62 @@ class DirichletTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
+class GoalFunctionalTest(CompressibleElasticProblem):
+    def __init__(self, n_points, elastic_law, top_displacement=-0.1, dim=3, main_dir=None, goal_functional="self._solution ** 2 *self._dV"):
+        super().__init__(elastic_law, main_dir, goal_functional=goal_functional)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._n_points = n_points
+        self._problem_name = "GoalFunctionalTest"
+
+        self.set_parameters(E=210.0, nu=0.3)
+
+        self._top_displacement = top_displacement
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = hyper_rectangle((-0.05, 0.0), (0.05, 1.0))
+        elif self._space_dim == 3:
+            self._mesh, self._boundary_markers = hyper_rectangle((-0.05, -0.05, 0.0), (0.05, 0.05, 1.0), (5, 5, 5))
+
+    def set_boundary_conditions(self):
+
+        if self._space_dim == 2:
+            # boundary conditions
+            gamma01 = PointSubDomain((0.0, 0.0), tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[1], 0.0)")
+
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 1, None),
+                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.top.value, 1, self._top_displacement)]
+
+        if self._space_dim == 3:
+            # boundary conditions
+            gamma01 = PointSubDomain((0.0, 0.0, 0.0), tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[2], 0.0)")
+            gamma03 = PointSubDomain((0.0, 0.1, 0.0), tol=1e-10)
+
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
+                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.front.value, 2, self._top_displacement)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+
+
 def test_tensile_test():
     for elastic_law in [Hooke(), StVenantKirchhoff(), NeoHooke()]:
         for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
@@ -411,7 +466,6 @@ def test_shear_test():
             print(f"Running {shear_test._problem_name} with {bc_type} boundary condition type.")
             shear_test.solve_problem()
             print()
-
 
 
 def test_body_force():
@@ -495,6 +549,23 @@ def test_dirichlet():
         print()
 
 
+def test_goal_functional(top_displacement=-0.9):
+    goal_functional = "self._elastic_law.postprocess_cauchy_stress(self._solution)[0, 0] * self._dV"
+    goal_functional_test = GoalFunctionalTest(25, StVenantKirchhoff(), top_displacement=top_displacement, dim=3, goal_functional=goal_functional)
+    print(f"Running {goal_functional_test._problem_name} with top displacemt {goal_functional_test._top_displacement}.")
+    goal_functional_test.solve_problem()
+    print()
+
+    stress_tensor = goal_functional_test._compute_stress_tensor()
+    # compute volume average of the stress tensor
+    dV = dlfn.Measure("dx", domain=goal_functional_test._mesh)
+    V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+    print("Volume-averaged stresses: ")
+    for i in range(goal_functional_test.space_dim):
+        for j in range(goal_functional_test.space_dim):
+            avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+            print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
 if __name__ == "__main__":
     test_tensile_test()
     test_shear_test()
@@ -502,3 +573,4 @@ if __name__ == "__main__":
     test_bc_function()
     test_cylinder()
     test_dirichlet()
+    test_goal_functional()

@@ -185,7 +185,7 @@ class CompressibleElasticProblem(ProblemBase):
         Maximum number of iterations in total.
     """
 
-    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
+    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50, **kwargs):
         """
         Constructor of the class.
         """
@@ -198,6 +198,12 @@ class CompressibleElasticProblem(ProblemBase):
         # set numerical tolerances
         self._tol = tol
         self._maxiter = maxiter
+
+        if "goal_functional" in kwargs.keys():
+            # 1st dimensionless coefficient
+            goal_functional = kwargs["goal_functional"]
+            assert isinstance(goal_functional, str)
+            self._goal_functional = goal_functional
 
     def _compute_stress_tensor(self):
         """
@@ -340,8 +346,13 @@ class CompressibleElasticProblem(ProblemBase):
 
         # create solver object
         if not hasattr(self, "_elastic_solver"):
-            self._elastic_solver = \
-                CompressibleElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
+            if hasattr(self, "_goal_functional"):
+                self._elastic_solver = \
+                    CompressibleElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law,
+                                                 goal_functional=self._goal_functional)
+            else:
+                self._elastic_solver = \
+                    CompressibleElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
 
         # pass boundary conditions
         self._elastic_solver.set_boundary_conditions(self._bcs)
@@ -364,8 +375,13 @@ class CompressibleElasticProblem(ProblemBase):
             dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
         self._elastic_solver.solve()
 
+        # update mesh and elastic_law if adaptive mesh refinemnt was applied
+        if hasattr(self, "_goal_functional"):
+            self._mesh = self._elastic_solver.solution.function_space().mesh()
+            self._elastic_solver._setup_function_spaces()
+            self._elastic_law.set_parameters(self._mesh, self._C)
+
         # postprocess solution
         self.postprocess_solution()
-
         # write XDMF-files
         self._write_xdmf_file()
