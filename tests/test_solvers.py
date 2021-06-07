@@ -16,7 +16,6 @@ class TensileTest(CompressibleElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
         super().__init__(elastic_law, main_dir)
 
-
         assert isinstance(n_points, int)
         assert n_points > 0
         self._n_points = n_points
@@ -413,7 +412,6 @@ def test_shear_test():
             print()
 
 
-
 def test_body_force():
     for elastic_law in [Hooke(), StVenantKirchhoff(), NeoHooke()]:
         body_force_test = BodyForceTest(25, elastic_law)
@@ -485,12 +483,12 @@ def test_dirichlet():
                 dlfn.errornorm(
                     u_ana, dirichlet_test._get_solver().solution,
                     'L2'
-                )
+                ) / dlfn.norm(u_ana)
             )
             dofs.append(
                 dirichlet_test._get_solver()._Vh.dim()
             )
-        print(f'>>> Elastc law: {dirichlet_test._elastic_law.name}.')
+        print(f'Elastic law: {dirichlet_test._elastic_law.name}:')
         [print(f'>>> With {dofs[i]} DoFs the error is {errors[i]}') for i in range(len(n_points))]
         print()
 

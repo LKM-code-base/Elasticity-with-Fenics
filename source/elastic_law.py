@@ -19,6 +19,7 @@ class ElasticLaw:
         self._I = dlfn.Identity(self._space_dim)
 
         assert isinstance(elastic_ratio, (dlfn.Constant, float))
+        assert float(elastic_ratio) > 0.
         self._elastic_ratio = elastic_ratio
 
     def dw_int(self, u, v):
@@ -26,6 +27,16 @@ class ElasticLaw:
 
     def postprocess_cauchy_stress(self, displacement):
         raise NotImplementedError("You are calling a purely virtual method.")
+
+    @property
+    def name(self):
+        assert hasattr(self, "_name")
+        return self._name
+
+    @property
+    def linearity_type(self):
+        assert hasattr(self, "_linearity_type")
+        return self._linearity_type
 
 
 class Hooke(ElasticLaw):
@@ -35,8 +46,8 @@ class Hooke(ElasticLaw):
 
     def __init__(self):
         super().__init__()
-        self.linearity_type = "Linear"
-        self.name = "Hooke"
+        self._linearity_type = "Linear"
+        self._name = "Hooke"
 
     def dw_int(self, u, v):
         """
@@ -58,7 +69,6 @@ class Hooke(ElasticLaw):
 
         def sym_grad(w):
             return dlfn.Constant(0.5) * (grad(w).T + grad(w))
-        # sym_grad = lambda w: dlfn.Constant(0.5)* (grad(w).T + grad(w))
 
         sigma = self._elastic_ratio * dlfn.tr(sym_grad(u)) * self._I \
             + dlfn.Constant(2.0) * sym_grad(u)
@@ -79,14 +89,14 @@ class Hooke(ElasticLaw):
 
         assert isinstance(displacement, dlfn.function.function.Function)
 
-        displacement_gradient = dlfn.grad(displacement)
+        # displacement gradient
+        H = grad(displacement)
         # strain tensor (symbolic)
-        strain = dlfn.Constant(0.5) * (displacement_gradient
-                                       + displacement_gradient.T)
+        strain = dlfn.Constant(0.5) * (H + H.T)
 
         # dimensionless Cauchy stress tensor (symbolic)
         sigma = dlfn.Constant(self._elastic_ratio) \
-            * dlfn.inner(self._I, strain) * self._I \
+            * inner(self._I, strain) * self._I \
             + dlfn.Constant(2.0) * strain
 
         return sigma
@@ -99,8 +109,8 @@ class StVenantKirchhoff(ElasticLaw):
 
     def __init__(self):
         super().__init__()
-        self.linearity_type = "Nonlinear"
-        self.name = "StVenantKirchhoff"
+        self._linearity_type = "Nonlinear"
+        self._name = "StVenantKirchhoff"
 
     def dw_int(self, u, v):
         """
@@ -120,8 +130,9 @@ class StVenantKirchhoff(ElasticLaw):
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
-        # kinematic variables
+        # deformation gradient
         F = self._I + grad(u)
+        # right Cauchy-Green tensor
         C = F.T * F
 
         # strain
@@ -130,8 +141,7 @@ class StVenantKirchhoff(ElasticLaw):
         S = self._elastic_ratio * dlfn.tr(E) * self._I \
             + dlfn.Constant(2.0) * E
 
-        dE = dlfn.Constant(0.5) * (F.T * grad(v)
-                                   + grad(v).T * F)
+        dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
 
         return inner(S, dE)
 
@@ -149,14 +159,17 @@ class StVenantKirchhoff(ElasticLaw):
 
         assert isinstance(displacement, dlfn.function.function.Function)
 
-        displacement_gradient = dlfn.grad(displacement)
-
-        deformation_gradient = self._I + displacement_gradient
-        right_cauchy_green_tensor = deformation_gradient.T * deformation_gradient
-        volume_ratio = dlfn.det(deformation_gradient)
+        # displacement gradient
+        H = dlfn.grad(displacement)
+        # deformation gradient
+        F = self._I + H
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # volume ratio
+        J = dlfn.det(F)
 
         # strain tensor (symbolic)
-        strain = dlfn.Constant(0.5) * (right_cauchy_green_tensor - self._I)
+        strain = dlfn.Constant(0.5) * (C - self._I)
 
         # dimensionless 2. Piola-Kirchhoff stress tensor (symbolic)
         S = dlfn.Constant(self._elastic_ratio) \
@@ -164,7 +177,7 @@ class StVenantKirchhoff(ElasticLaw):
             + dlfn.Constant(2.0) * strain
 
         # dimensionless Cauchy stress tensor (symbolic)
-        sigma = (deformation_gradient * S * deformation_gradient.T) / volume_ratio
+        sigma = (F * S * F.T) / J
 
         return sigma
 
@@ -177,8 +190,8 @@ class NeoHooke(ElasticLaw):
 
     def __init__(self):
         super().__init__()
-        self.linearity_type = "Nonlinear"
-        self.name = "Neo-Hooke"
+        self._linearity_type = "Nonlinear"
+        self._name = "Neo-Hooke"
 
     def dw_int(self, u, v):
         """
@@ -198,16 +211,17 @@ class NeoHooke(ElasticLaw):
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
-        # kinematic variables
+        # deformation gradient
         F = self._I + grad(u)
+        # right Cauchy-Green tensor
         C = F.T * F
+        # volume ratio
         J = dlfn.det(F)
 
         # 2. Piola-Kirchhoff stress
         S = self._I - J ** (-self._elastic_ratio) * inv(C)
 
-        dE = dlfn.Constant(0.5) * (F.T * grad(v)
-                                   + grad(v).T * F)
+        dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
 
         return inner(S, dE)
 
@@ -224,18 +238,19 @@ class NeoHooke(ElasticLaw):
         assert hasattr(self, "_I")
 
         assert isinstance(displacement, dlfn.function.function.Function)
-
-        displacement_gradient = dlfn.grad(displacement)
-
-        deformation_gradient = self._I + displacement_gradient
-        right_cauchy_green_tensor = deformation_gradient.T * deformation_gradient
-        volume_ratio = dlfn.det(deformation_gradient)
+        # displacement gradient
+        H = grad(displacement)
+        # deformation gradient
+        F = self._I + H
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # volume ratio
+        J = dlfn.det(F)
 
         # dimensionless 2. Piola-Kirchhoff stress tensor (symbolic)
-        S = self._I \
-            - volume_ratio ** (-self._elastic_ratio) * inv(right_cauchy_green_tensor)
+        S = self._I - J ** (-self._elastic_ratio) * inv(C)
 
         # dimensionless Cauchy stress tensor (symbolic)
-        sigma = (deformation_gradient * S * deformation_gradient.T) / volume_ratio
+        sigma = (F * S * F.T) / J
 
         return sigma
