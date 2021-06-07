@@ -18,7 +18,7 @@ def compare_tuples(a, b, tol=1.0e-15):
     if all(isinstance(x, int) for x in a) and all(isinstance(x, int) for x in b):
         assert all(x == y for x, y in zip(a, b))
     elif all(isinstance(x, float) for x in a) and all(isinstance(x, float) for x in b):
-        assert all(abs(x-y) < tol for x, y in zip(a, b))
+        assert all(abs(x - y) < tol for x, y in zip(a, b))
     else:
         raise ValueError()
 
