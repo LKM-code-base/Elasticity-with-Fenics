@@ -38,6 +38,11 @@ class ElasticLaw:
         assert hasattr(self, "_linearity_type")
         return self._linearity_type
 
+    @property
+    def compressiblity_type(self):
+        assert hasattr(self, "_compressibility_type")
+        return self._compressiblity_type
+
 
 class Hooke(ElasticLaw):
     """
@@ -48,6 +53,7 @@ class Hooke(ElasticLaw):
         super().__init__()
         self._linearity_type = "Linear"
         self._name = "Hooke"
+        self._compressiblity_type = "compressible"
 
     def dw_int(self, u, v):
         """
@@ -111,6 +117,7 @@ class StVenantKirchhoff(ElasticLaw):
         super().__init__()
         self._linearity_type = "Nonlinear"
         self._name = "StVenantKirchhoff"
+        self._compressiblity_type = "compressible"
 
     def dw_int(self, u, v):
         """
@@ -192,6 +199,7 @@ class NeoHooke(ElasticLaw):
         super().__init__()
         self._linearity_type = "Nonlinear"
         self._name = "Neo-Hooke"
+        self._compressiblity_type = "compressible"
 
     def dw_int(self, u, v):
         """
