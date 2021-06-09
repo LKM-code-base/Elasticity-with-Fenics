@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from auxiliary_classes import PointSubDomain
-from grid_generator import hyper_cube, cylinder
+from grid_generator import hyper_cube, cylinder, hyper_rectangle
 from grid_generator import HyperCubeBoundaryMarkers, CylinderBoundaryMarkers
 from elastic_problem import CompressibleElasticProblem
 from elastic_solver import DisplacementBCType
@@ -265,6 +265,62 @@ class CylinderTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
+class HyperRectangleTest(CompressibleElasticProblem):
+    def __init__(self, n_points, elastic_law, top_displacement=0.1, dim=3, main_dir=None):
+        super().__init__(elastic_law, main_dir)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._n_points = n_points
+        self._problem_name = "HyperRectangleTest"
+
+        self.set_parameters(E=210.0, nu=0.3)
+
+        self._top_displacement = top_displacement
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = hyper_rectangle((-0.05, 0.0),(0.05, 1.0))
+        elif self._space_dim == 3:
+            self._mesh, self._boundary_markers = hyper_rectangle((-0.05, -0.05, 0.0),(0.05, 0.05, 1.0))
+
+    def set_boundary_conditions(self):
+
+        if self._space_dim == 2:
+            # boundary conditions
+            gamma01 = PointSubDomain((0.0, 0.0), tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[1], 0.0)")
+
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 1, None),
+                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.top.value, 1, self._top_displacement)]
+
+        if self._space_dim == 3:
+            # boundary conditions
+            gamma01 = PointSubDomain((0.0, 0.0, 0.0), tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[2], 0.0)")
+            gamma03 = PointSubDomain((0.0, 0.1, 0.0), tol=1e-10)
+
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
+                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.front.value, 2, self._top_displacement)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+
+
 class DirichletTest(CompressibleElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
         super().__init__(elastic_law, main_dir)
@@ -464,6 +520,33 @@ def test_cylinder_iteration(dim=2, elastic_law=StVenantKirchhoff()):
     print("Avg. stress:")
     print(stresses)
 
+def test_hyper_rectangle(top_displacement=-0.1, dim=3, source="Holzapfel"):
+    hyper_rectangle_test = HyperRectangleTest(25, NeoHooke(source=source), top_displacement=top_displacement, dim=dim)
+    print(f"Elastic law: {hyper_rectangle_test._elastic_law.name} {hyper_rectangle_test._elastic_law.source}")
+    print(f"Running {hyper_rectangle_test._problem_name} with top displacemt {hyper_rectangle_test._top_displacement}.")
+    hyper_rectangle_test.solve_problem()
+    print()
+
+    stress_tensor = hyper_rectangle_test._compute_stress_tensor()
+    # compute volume average of the stress tensor
+    dV = dlfn.Measure("dx", domain=hyper_rectangle_test._mesh)
+    V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+    print("Volume-averaged stresses: ")
+    for i in range(hyper_rectangle_test.space_dim):
+        for j in range(hyper_rectangle_test.space_dim):
+            avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+            print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+    print()
+    return (dlfn.assemble(stress_tensor[hyper_rectangle_test._space_dim - 1, hyper_rectangle_test._space_dim - 1] * dV) / V)
+
+def test_hyper_rectangle_iteration(source="Holzapfel"):
+    displacements = np.linspace(-0.7, 0.5, num=30)
+    stresses = []
+    for displacement in displacements:
+        stresses.append(test_hyper_rectangle(top_displacement=displacement, source=source))
+    
+    for i in range(len(displacements)):
+        print(f"{displacements[i]+1.0} {stresses[i]}")
 
 def test_dirichlet():
     for elastic_law in (Hooke(), StVenantKirchhoff()):
@@ -500,3 +583,5 @@ if __name__ == "__main__":
     test_bc_function()
     test_cylinder()
     test_dirichlet()
+    test_hyper_rectangle(source="Belytschko")
+    test_hyper_rectangle_iteration(source="Abaqus")

@@ -233,7 +233,7 @@ class NeoHooke(ElasticLaw):
             S = self._I + (self._elastic_ratio * dlfn.ln(J) - dlfn.Constant(1.0)) * inv(C)
         elif self._source.lower() == 'abaqus':
             S = 1. / J ** (2. / 3.) * (self._I - dlfn.tr(C) / 3. * inv(C)) \
-                + (self._elastic_constant + 2. / 3.) * J * (J - 1) * self._I
+                + (self._elastic_ratio + 2. / 3.) * J * (J - 1) * self._I
 
         dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
 
@@ -268,7 +268,7 @@ class NeoHooke(ElasticLaw):
             S = self._I + (self._elastic_ratio * dlfn.ln(J) - dlfn.Constant(1.0)) * inv(C)
         elif self._source.lower() == 'abaqus':
             S = 1. / J ** (2. / 3.) * (self._I - dlfn.tr(C) / 3. * inv(C)) \
-                + (self._elastic_constant + 2. / 3.) * J * (J - 1) * self._I
+                + (self._elastic_ratio + 2. / 3.) * J * (J - 1) * self._I
 
         # dimensionless Cauchy stress tensor (symbolic)
         sigma = (F * S * F.T) / J
