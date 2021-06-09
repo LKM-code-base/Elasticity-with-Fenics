@@ -30,7 +30,8 @@ class ProblemBase:
         assert hasattr(elastic_law, "linearity_type")
         assert hasattr(elastic_law, "name")
 
-        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law.name}")
+        self._results_dir = path.join(self._main_dir,
+                                      f"results/{self._elastic_law.linearity_type}/{self._elastic_law.name + self._elastic_law.source}")
 
     def _add_to_field_output(self, field):
         """

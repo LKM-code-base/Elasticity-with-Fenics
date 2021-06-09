@@ -7,7 +7,8 @@ from dolfin import grad, inner
 
 class ElasticLaw:
     def __init__(self):
-        pass
+        # book source of elastic law
+        self._source = ''
 
     def set_parameters(self, mesh, elastic_ratio):
 
@@ -37,6 +38,11 @@ class ElasticLaw:
     def linearity_type(self):
         assert hasattr(self, "_linearity_type")
         return self._linearity_type
+
+    @property
+    def source(self):
+        assert hasattr(self, "_source")
+        return self._source
 
 
 class Hooke(ElasticLaw):
@@ -188,10 +194,12 @@ class NeoHooke(ElasticLaw):
     see Holzapfel p. 247.
     """
 
-    def __init__(self):
+    def __init__(self, source='Holzapfel'):
         super().__init__()
+        assert isinstance(source, str) and source.lower() in ('holzapfel', 'belytschko', 'abaqus')
         self._linearity_type = "Nonlinear"
         self._name = "Neo-Hooke"
+        self._source = source
 
     def dw_int(self, u, v):
         """
@@ -219,7 +227,13 @@ class NeoHooke(ElasticLaw):
         J = dlfn.det(F)
 
         # 2. Piola-Kirchhoff stress
-        S = self._I - J ** (-self._elastic_ratio) * inv(C)
+        if self._source.lower() == 'holzapfel':
+            S = self._I - J ** (-self._elastic_ratio) * inv(C)
+        elif self._source.lower() == 'belytschko':
+            S = self._I + (self._elastic_ratio * dlfn.ln(J) - dlfn.Constant(1.0)) * inv(C)
+        elif self._source.lower() == 'abaqus':
+            S = 1. / J ** (2. / 3.) * (self._I - dlfn.tr(C) / 3. * inv(C)) \
+                + (self._elastic_constant + 2. / 3.) * J * (J - 1) * self._I
 
         dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
 
@@ -248,7 +262,13 @@ class NeoHooke(ElasticLaw):
         J = dlfn.det(F)
 
         # dimensionless 2. Piola-Kirchhoff stress tensor (symbolic)
-        S = self._I - J ** (-self._elastic_ratio) * inv(C)
+        if self._source.lower() == 'holzapfel':
+            S = self._I - J ** (-self._elastic_ratio) * inv(C)
+        elif self._source.lower() == 'belytschko':
+            S = self._I + (self._elastic_ratio * dlfn.ln(J) - dlfn.Constant(1.0)) * inv(C)
+        elif self._source.lower() == 'abaqus':
+            S = 1. / J ** (2. / 3.) * (self._I - dlfn.tr(C) / 3. * inv(C)) \
+                + (self._elastic_constant + 2. / 3.) * J * (J - 1) * self._I
 
         # dimensionless Cauchy stress tensor (symbolic)
         sigma = (F * S * F.T) / J
