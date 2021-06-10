@@ -201,7 +201,6 @@ def hyper_rectangle(first_point, second_point, n_points=10):
 
     # mesh generation
     if dim == 2:
-
         mesh = dlfn.RectangleMesh(*corner_points, *n_points)
     else:
         mesh = dlfn.BoxMesh(*corner_points, *n_points)
@@ -388,6 +387,7 @@ def rectangle_two_materials():  # pragma: no cover
     fname = "RectangleTwoMaterials.geo"
     geo_files = glob.glob("../*/*/*.geo", recursive=True)
     geo_files += glob.glob("./*/*/*.geo", recursive=True)
+    geo_files += glob.glob("./*.geo", recursive=True)
     for file in geo_files:
         if fname in file:
             geo_file = file

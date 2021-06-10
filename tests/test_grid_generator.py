@@ -9,6 +9,7 @@ from grid_generator import cylinder
 from grid_generator import _extract_facet_markers
 from os import path
 import subprocess
+import time
 
 
 def test_hyper_cube():
@@ -58,6 +59,7 @@ def test_extract_boundary_markers():
             geo_file = file
             break
     assert path.exists(geo_file)
+    time.sleep(10)
     _ = _extract_facet_markers(geo_file)
     subprocess.run(["rm", geo_file], check=True)
 
