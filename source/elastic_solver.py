@@ -126,7 +126,7 @@ class SolverBase:
     @property
     def field_association(self):
         return self._field_association
-    # To Do: Change to displacement and pressure
+
     @property
     def solution(self):
         return self._solution
@@ -483,12 +483,12 @@ class IncompressibleElasticitySolver(SolverBase):
     Base class for incompressible elasticity.
     """
     # class variables
-    _sub_space_association = {0: "displacement"}
+    _sub_space_association = {0: "displacement", 1: "pressure"}
     _field_association = {value: key for key, value in _sub_space_association.items()}
     _null_scalar = dlfn.Constant(0.)
 
     def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=2):
-        assert elastic_law.compressiblity_type != "incompressible"
+        assert elastic_law.compressiblity_type == "Incompressible"
         super().__init__(mesh, boundary_markers, elastic_law, polynomial_degree)
 
     def _check_boundary_condition_format(self, bc):
@@ -688,7 +688,6 @@ class IncompressibleElasticitySolver(SolverBase):
             # HINT: traction boundary conditions are covered in _setup_problem
 
     def _setup_function_spaces(self):
-        # To Do: Change to mixed FE space
         """
         Class method setting up function spaces.
         """
@@ -696,7 +695,7 @@ class IncompressibleElasticitySolver(SolverBase):
         cell = self._mesh.ufl_cell()
         # element formulation
         elemU = dlfn.VectorElement("CG", cell, self._p_deg)
-        elemP = dlfn.FiniteElement("CG", cell, self._p_deg-1)
+        elemP = dlfn.FiniteElement("CG", cell, self._p_deg - 1)
         mixed_element = dlfn.MixedElement([elemU, elemP])
         # mixed function space
         self._Wh = dlfn.FunctionSpace(self._mesh, mixed_element)
@@ -705,7 +704,7 @@ class IncompressibleElasticitySolver(SolverBase):
         self._n_dofs = self._Wh.dim()
         # print info
         assert hasattr(self, "_n_cells")
-        dlfn.info("Number of cells {0}, number of DoFs: {1} consisting of {2} solid DoFs and {5} pressure DoFs".format(self._n_cells, self._n_dofs, self._Vh.dim(),self._Ph.dim()))
+        dlfn.info("Number of cells {0}, number of DoFs: {1} consisting of {2} solid DoFs and {3} pressure DoFs".format(self._n_cells, self._n_dofs, self._Vh.dim(), self._Ph.dim()))
 
     def set_dimensionless_numbers(self, C, D=None):
         """
@@ -730,7 +729,6 @@ class IncompressibleElasticitySolver(SolverBase):
                 self._D.assign(D)
 
     def _setup_problem(self):
-        # To Do: Additional terms for pressure, e.g., testfunction, internal enegry parts
         """
         Method setting up solver objects of the stationary problem.
         """
@@ -741,11 +739,12 @@ class IncompressibleElasticitySolver(SolverBase):
         self._setup_boundary_conditions()
 
         # creating test function
-        self._v, self._q = dlfn.TestFunction(self._Wh)
+        self._v, self._q = dlfn.TestFunctions(self._Wh)
 
         # solution
         self._solution = dlfn.Function(self._Wh)
         self._u, self._p = dlfn.split(self._solution)
+
         # volume element
         self._dV = dlfn.Measure("dx", domain=self._mesh)
         self._dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
@@ -754,11 +753,7 @@ class IncompressibleElasticitySolver(SolverBase):
         self._elastic_law.set_parameters(self._mesh, self._C)
 
         # virtual work
-        # To Do
-        if self._elastic_law.linearity_type == "Linear":
-            self._dw_int = self._elastic_law.dw_int(self._u, self._v) * self._dV
-        elif self._elastic_law.linearity_type == "Nonlinear":
-            self._dw_int = self._elastic_law.dw_int(self._solution, self._v) * self._dV
+        self._dw_int = self._elastic_law.dw_int(self._u, self._p, self._v, self._q) * self._dV
 
         # virtual work of external forces
         self._dw_ext = dlfn.dot(self._null_vector, self._v) * self._dV
@@ -796,22 +791,14 @@ class IncompressibleElasticitySolver(SolverBase):
                     assert isinstance(traction, dlfn.Expression)
                     self._dw_ext += traction * self._v[component_index] * self._dA(bndry_id)
 
-        if self._elastic_law.linearity_type == "Linear":
-            # linear variational problem
-            self._problem = dlfn.LinearVariationalProblem(self._dw_int, self._dw_ext,
-                                                          self._solution,
-                                                          self._dirichlet_bcs)
-            # setup linear variational solver
-            self._solver = dlfn.LinearVariationalSolver(self._problem)
-        elif self._elastic_law.linearity_type == "Nonlinear":
-            self._Form = self._dw_int - self._dw_ext
-            self._J_newton = dlfn.derivative(self._Form, self._solution)
-            self._problem = dlfn.NonlinearVariationalProblem(self._Form,
-                                                             self._solution,
-                                                             self._dirichlet_bcs,
-                                                             J=self._J_newton)
-            # setup linear variational solver
-            self._solver = dlfn.NonlinearVariationalSolver(self._problem)
+        self._Form = self._dw_int - self._dw_ext
+        self._J_newton = dlfn.derivative(self._Form, self._solution)
+        self._problem = dlfn.NonlinearVariationalProblem(self._Form,
+                                                         self._solution,
+                                                         self._dirichlet_bcs,
+                                                         J=self._J_newton)
+        # setup linear variational solver
+        self._solver = dlfn.NonlinearVariationalSolver(self._problem)
 
     def solve(self):
         """

@@ -40,7 +40,7 @@ class ElasticLaw:
 
     @property
     def compressiblity_type(self):
-        assert hasattr(self, "_compressibility_type")
+        assert hasattr(self, "_compressiblity_type")
         return self._compressiblity_type
 
 
@@ -53,7 +53,7 @@ class Hooke(ElasticLaw):
         super().__init__()
         self._linearity_type = "Linear"
         self._name = "Hooke"
-        self._compressiblity_type = "compressible"
+        self._compressiblity_type = "Compressible"
 
     def dw_int(self, u, v):
         """
@@ -117,7 +117,7 @@ class StVenantKirchhoff(ElasticLaw):
         super().__init__()
         self._linearity_type = "Nonlinear"
         self._name = "StVenantKirchhoff"
-        self._compressiblity_type = "compressible"
+        self._compressiblity_type = "Compressible"
 
     def dw_int(self, u, v):
         """
@@ -199,7 +199,7 @@ class NeoHooke(ElasticLaw):
         super().__init__()
         self._linearity_type = "Nonlinear"
         self._name = "Neo-Hooke"
-        self._compressiblity_type = "compressible"
+        self._compressiblity_type = "Compressible"
 
     def dw_int(self, u, v):
         """
@@ -257,6 +257,115 @@ class NeoHooke(ElasticLaw):
 
         # dimensionless 2. Piola-Kirchhoff stress tensor (symbolic)
         S = self._I - J ** (-self._elastic_ratio) * inv(C)
+
+        # dimensionless Cauchy stress tensor (symbolic)
+        sigma = (F * S * F.T) / J
+
+        return sigma
+
+
+class NeoHookeIncompressible(ElasticLaw):
+    """
+    Class to simulate nonlinear incompressible elasticity with Neo-Hooke law,
+    see Holzapfel p. 238 and p. 402.
+    """
+
+    def __init__(self):
+        super().__init__()
+        self._linearity_type = "Nonlinear"
+        self._name = "Neo-Hooke"
+        self._compressiblity_type = "Incompressible"
+
+    def dw_int(self, u, p, v, q):
+        """
+        Construct internal energy.
+
+        Parameters
+        ----------
+        u : Function
+            Displacement.
+        p : Function
+            Pressure.
+        v : TestFunction
+            Displacement.
+        q : TestFunction
+            Pressure.
+
+        Returns
+        -------
+        Form
+            Internal energy in the variational form.
+        """
+
+        # u, p Functions
+        # assert isinstance(u, dlfn.function.function.Function)
+        # assert isinstance(p, dlfn.function.function.Function)
+        # v, q TestFunctions
+        # assert isinstance(v, dlfn.function.argument.Argument)
+        # assert isinstance(q, dlfn.function.argument.Argument)
+
+        assert hasattr(self, "_elastic_ratio")
+        assert hasattr(self, "_I")
+
+        # deformation gradient
+        F = self._I + grad(u)
+        # volume ratio
+        J = dlfn.det(F)
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # right Cauchy-Green tensor for isochoric deformation
+        # C_iso = J ** (- 2 / 3) * C
+
+        # 2. Piola-Kirchhoff stress
+        S_vol = J * p * inv(C)
+        # with psi_iso = mu / 2 * (dlfn.tr(C_iso) - 3) (p. 247, eq. 6.146) we
+        # get S_iso = d/dC_iso psi_iso =  mu * Identity
+        S_iso = self._I
+        S = S_vol + S_iso
+
+        dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
+
+        return inner(S, dE) + (J - 1) * q
+
+    def postprocess_cauchy_stress(self, displacement, pressure):
+        """
+        Compute Cauchy stress from given numerical solution.
+
+        Parameters
+        ----------
+        displacement : Function
+            Displacement.
+        pressure : Function
+            Pressure.
+
+        Returns
+        -------
+        sigma : Form
+            Cauchy stress.
+
+        """
+
+        assert hasattr(self, "_elastic_ratio")
+        assert hasattr(self, "_I")
+
+        # assert isinstance(displacement, dlfn.function.function.Function)
+        # assert isinstance(pressure, dlfn.function.function.Function)
+
+        # displacement gradient
+        H = grad(displacement)
+        # deformation gradient
+        F = self._I + H
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # volume ratio
+        J = dlfn.det(F)
+
+        # 2. Piola-Kirchhoff stress
+        S_vol = J * pressure * inv(C)
+        # with psi_iso = mu / 2 * (dlfn.tr(C_iso) - 3) (p. 247, eq. 6.146) we
+        # get S_iso = d/dC_iso psi_iso =  mu * Identity
+        S_iso = self._I
+        S = S_vol + S_iso
 
         # dimensionless Cauchy stress tensor (symbolic)
         sigma = (F * S * F.T) / J

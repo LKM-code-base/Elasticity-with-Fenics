@@ -6,7 +6,7 @@ from math import isfinite
 import dolfin as dlfn
 from auxiliary_methods import compute_elasticity_coefficients
 from auxiliary_methods import ElasticModuli
-from elastic_solver import CompressibleElasticitySolver
+from elastic_solver import CompressibleElasticitySolver, IncompressibleElasticitySolver
 from elastic_law import ElasticLaw
 
 
@@ -30,7 +30,7 @@ class ProblemBase:
         assert hasattr(elastic_law, "linearity_type")
         assert hasattr(elastic_law, "name")
 
-        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law.name}")
+        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law._compressiblity_type}/{self._elastic_law.name}")
 
     def _add_to_field_output(self, field):
         """
@@ -342,6 +342,234 @@ class CompressibleElasticProblem(ProblemBase):
         if not hasattr(self, "_elastic_solver"):
             self._elastic_solver = \
                 CompressibleElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
+
+        # pass boundary conditions
+        self._elastic_solver.set_boundary_conditions(self._bcs)
+
+        # pass dimensionless numbers
+        if hasattr(self, "_D"):
+            self._elastic_solver.set_dimensionless_numbers(self._C, self._D)
+        else:
+            self._elastic_solver.set_dimensionless_numbers(self._C)
+
+        # pass body force
+        if hasattr(self, "_body_force"):
+            self._elastic_solver.set_body_force(self._body_force)
+
+        # solve problem
+        if self._D is not None:
+            dlfn.info("Solving problem with C = {0:.2f} and "
+                      "D = {1:0.2f}".format(self._C, self._D))
+        else:
+            dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
+        self._elastic_solver.solve()
+
+        # postprocess solution
+        self.postprocess_solution()
+
+        # write XDMF-files
+        self._write_xdmf_file()
+
+
+class IncompressibleElasticProblem(ProblemBase):
+    """
+    Class to simulate an incompressible elastic problem using the
+    `IncompressibleElasticitySolver`.
+
+    Parameters
+    ----------
+    elastic_law: ElasticLaw
+        Underlying elastic law.
+    main_dir: str (optional)
+        Directory to save the results.
+    tol: float (optional)
+        Final tolerance.
+    maxiter: int (optional)
+        Maximum number of iterations in total.
+    """
+
+    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
+        """
+        Constructor of the class.
+        """
+        super().__init__(elastic_law, main_dir)
+
+        # input check
+        assert isinstance(maxiter, int) and maxiter > 0
+        assert isinstance(tol, float) and tol > 0.0
+
+        # set numerical tolerances
+        self._tol = tol
+        self._maxiter = maxiter
+
+    def _compute_stress_tensor(self):
+        """
+        Returns the stress tensor.
+        """
+        assert hasattr(self, "_C")
+        solver = self._get_solver()
+
+        # displacement vector
+        displacement, pressure = solver.solution.split(True)
+        # compute cauchy stress
+        stress = self._elastic_law.postprocess_cauchy_stress(displacement, pressure)
+
+        # create function space
+        family = displacement.ufl_function_space().ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_function_space().ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemSigma = dlfn.TensorElement("DG", cell, degree - 1,
+                                       shape=(self._space_dim, self._space_dim),
+                                       symmetry=True)
+        Sh = dlfn.FunctionSpace(self._mesh, elemSigma)
+
+        # project
+        sigma = dlfn.project(stress, Sh)
+        sigma.rename("sigma", "")
+
+        return sigma
+
+    def _compute_volume_ratio(self):
+        """
+        Returns the volume ratio J.
+        """
+        solver = self._get_solver()
+        # displacement vector
+        displacement, pressure = solver.solution.split(True)
+        # compute volume ratio
+        J = dlfn.det(dlfn.Identity(self._space_dim) + dlfn.grad(displacement))
+
+        # create function space
+        family = displacement.ufl_function_space().ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_function_space().ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemJ = dlfn.FiniteElement("DG", cell, degree - 1)
+
+        Sh = dlfn.FunctionSpace(self._mesh, elemJ)
+
+        # project
+        J = dlfn.project(J, Sh)
+        J.rename("J", "")
+
+        return J
+
+    def _get_filename(self):
+        """
+        Class method returning a filename.
+        """
+        # input check
+        assert hasattr(self, "_problem_name")
+        problem_name = self._problem_name
+
+        fname = problem_name
+        fname += self._suffix
+
+        return path.join(self._results_dir, fname)
+
+    def set_parameters(self, **kwargs):
+        """
+        Sets up the parameters of the model by creating or modifying class
+        objects.
+        """
+        if "C" in kwargs.keys():
+            # 1st dimensionless coefficient
+            C = kwargs["C"]
+            assert isinstance(C, float)
+            assert isfinite(C)
+            assert C > 0.0
+            self._C = C
+            # 2nd dimensionless coefficient
+            if "D" in kwargs.keys():
+                D = kwargs["D"]
+                assert isinstance(D, float)
+                assert isfinite(D)
+                assert D > 0.0
+                self._D = D
+
+        else:
+            # extract elastic moduli
+            cleaned_kwargs = kwargs.copy()
+            if "lref" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("lref")
+            if "bref" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("bref")
+            elastic_moduli = compute_elasticity_coefficients(**cleaned_kwargs)
+            lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
+            mu = elastic_moduli[ElasticModuli.ShearModulus]
+            # 1st dimensionless coefficient
+            self._C = lmbda / mu
+
+            # 2nd optional dimensionless coefficient
+            if "lref" in kwargs.keys() and "bref" in kwargs.keys():
+                # reference length
+                lref = kwargs["lref"]
+                assert isinstance(lref, float)
+                assert isfinite(lref)
+                assert lref > 0.0
+                # reference value for the body force density
+                bref = kwargs["bref"]
+                assert isinstance(bref, float)
+                assert isfinite(bref)
+                assert bref > 0.0
+                # 2nd optional dimensionless coefficient
+                self._D = bref * lref / mu
+
+            else:
+                self._D = None
+
+    def write_boundary_markers(self):
+        """
+        Write the boundary markers specified by the MeshFunction
+        `_boundary_markers` to a pvd-file.
+        """
+        assert hasattr(self, "_boundary_markers")
+        assert hasattr(self, "_problem_name")
+
+        # create results directory
+        assert hasattr(self, "_results_dir")
+        if not path.exists(self._results_dir):
+            os.makedirs(self._results_dir)
+
+        problem_name = self._problem_name
+        suffix = ".pvd"
+        fname = problem_name + "_BoundaryMarkers"
+        fname += suffix
+        fname = path.join(self._results_dir, fname)
+
+        dlfn.File(fname) << self._boundary_markers
+
+    def _get_solver(self):
+        assert hasattr(self, "_elastic_solver")
+        return self._elastic_solver
+
+    def solve_problem(self):
+        """
+        Solve the stationary problem.
+        """
+        # setup mesh
+        self.setup_mesh()
+        assert self._mesh is not None
+        self._space_dim = self._mesh.geometry().dim()
+        self._n_cells = self._mesh.num_cells()
+
+        # setup boundary conditions
+        self.set_boundary_conditions()
+
+        # setup body force
+        self.set_body_force()
+
+        # setup parameters
+        if not hasattr(self, "_C"):
+            self.set_parameters()
+
+        # create solver object
+        if not hasattr(self, "_elastic_solver"):
+            self._elastic_solver = \
+                IncompressibleElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
 
         # pass boundary conditions
         self._elastic_solver.set_boundary_conditions(self._bcs)
