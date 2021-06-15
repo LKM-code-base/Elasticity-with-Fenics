@@ -3,15 +3,15 @@
 from auxiliary_classes import PointSubDomain
 from grid_generator import hyper_cube
 from grid_generator import HyperCubeBoundaryMarkers
-from elastic_problem import IncompressibleElasticProblem
+from elastic_problem import ElasticProblem
 from elastic_solver import DisplacementBCType
 from elastic_law import NeoHookeIncompressible
 import dolfin as dlfn
 
 
-class TensileTest(IncompressibleElasticProblem):
-    def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
-        super().__init__(elastic_law, main_dir)
+class TensileTest(ElasticProblem):
+    def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating", polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
 
         assert isinstance(n_points, int)
         assert n_points > 0

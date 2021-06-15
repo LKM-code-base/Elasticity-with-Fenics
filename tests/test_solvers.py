@@ -3,7 +3,7 @@
 from auxiliary_classes import PointSubDomain
 from grid_generator import hyper_cube, cylinder
 from grid_generator import HyperCubeBoundaryMarkers, CylinderBoundaryMarkers
-from elastic_problem import CompressibleElasticProblem
+from elastic_problem import ElasticProblem
 from elastic_solver import DisplacementBCType
 from elastic_solver import TractionBCType
 from elastic_law import Hooke, StVenantKirchhoff, NeoHooke
@@ -12,7 +12,7 @@ import numpy as np
 import sympy as sp
 
 
-class TensileTest(CompressibleElasticProblem):
+class TensileTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
         super().__init__(elastic_law, main_dir)
 
@@ -81,7 +81,7 @@ class TensileTest(CompressibleElasticProblem):
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
-class ShearTest(CompressibleElasticProblem):
+class ShearTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="displacement"):
         super().__init__(elastic_law, main_dir)
 
@@ -137,7 +137,7 @@ class ShearTest(CompressibleElasticProblem):
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
-class BodyForceTest(CompressibleElasticProblem):
+class BodyForceTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
@@ -175,7 +175,7 @@ class BodyForceTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
-class BCFunctionTest(CompressibleElasticProblem):
+class BCFunctionTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
@@ -209,7 +209,7 @@ class BCFunctionTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
-class CylinderTest(CompressibleElasticProblem):
+class CylinderTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, top_displacement=0.1, dim=3, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
@@ -265,7 +265,7 @@ class CylinderTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
-class DirichletTest(CompressibleElasticProblem):
+class DirichletTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
