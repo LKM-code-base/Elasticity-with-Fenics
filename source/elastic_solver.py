@@ -391,7 +391,6 @@ class CompressibleElasticitySolver(SolverBase):
 
         # creating test function
         self._v = dlfn.TestFunction(self._Vh)
-        self._u = dlfn.TrialFunction(self._Vh)
 
         # solution
         self._solution = dlfn.Function(self._Vh)
@@ -404,10 +403,7 @@ class CompressibleElasticitySolver(SolverBase):
         self._elastic_law.set_parameters(self._mesh, self._C)
 
         # virtual work
-        if self._elastic_law.linearity_type == "Linear":
-            self._dw_int = self._elastic_law.dw_int(self._u, self._v) * self._dV
-        elif self._elastic_law.linearity_type == "Nonlinear":
-            self._dw_int = self._elastic_law.dw_int(self._solution, self._v) * self._dV
+        self._dw_int = self._elastic_law.dw_int(self._solution, self._v) * self._dV
 
         # virtual work of external forces
         self._dw_ext = dlfn.dot(self._null_vector, self._v) * self._dV
@@ -445,22 +441,14 @@ class CompressibleElasticitySolver(SolverBase):
                     assert isinstance(traction, dlfn.Expression)
                     self._dw_ext += traction * self._v[component_index] * self._dA(bndry_id)
 
-        if self._elastic_law.linearity_type == "Linear":
-            # linear variational problem
-            self._problem = dlfn.LinearVariationalProblem(self._dw_int, self._dw_ext,
-                                                          self._solution,
-                                                          self._dirichlet_bcs)
-            # setup linear variational solver
-            self._solver = dlfn.LinearVariationalSolver(self._problem)
-        elif self._elastic_law.linearity_type == "Nonlinear":
-            self._Form = self._dw_int - self._dw_ext
-            self._J_newton = dlfn.derivative(self._Form, self._solution)
-            self._problem = dlfn.NonlinearVariationalProblem(self._Form,
-                                                             self._solution,
-                                                             self._dirichlet_bcs,
-                                                             J=self._J_newton)
-            # setup linear variational solver
-            self._solver = dlfn.NonlinearVariationalSolver(self._problem)
+        self._Form = self._dw_int - self._dw_ext
+        self._J_newton = dlfn.derivative(self._Form, self._solution)
+        self._problem = dlfn.NonlinearVariationalProblem(self._Form,
+                                                            self._solution,
+                                                            self._dirichlet_bcs,
+                                                            J=self._J_newton)
+        # setup linear variational solver
+        self._solver = dlfn.NonlinearVariationalSolver(self._problem)
 
     def solve(self):
         """

@@ -61,12 +61,12 @@ class Hooke(ElasticLaw):
 
         Parameters
         ----------
-        u: TrialFunction
+        u: Function
 
         v: TestFunction
         """
-        # u TrialFunction (only in the linear case)
-        assert isinstance(u, dlfn.function.argument.Argument)
+        # u Function
+        assert isinstance(u, dlfn.function.function.Function)
         # v TestFunction
         assert isinstance(v, dlfn.function.argument.Argument)
 
@@ -129,7 +129,7 @@ class StVenantKirchhoff(ElasticLaw):
 
         v: TestFunction
         """
-        # u Function (in the nonlinear case)
+        # u Function
         assert isinstance(u, dlfn.function.function.Function)
         # v TestFunction
         assert isinstance(v, dlfn.function.argument.Argument)
@@ -211,7 +211,7 @@ class NeoHooke(ElasticLaw):
 
         v: TestFunction
         """
-        # u Function (in the nonlinear case)
+        # u Function
         assert isinstance(u, dlfn.function.function.Function)
         # v TestFunction
         assert isinstance(v, dlfn.function.argument.Argument)
