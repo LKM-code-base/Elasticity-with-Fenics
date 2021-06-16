@@ -278,7 +278,7 @@ class ElasticProblem(ProblemBase):
         J.rename("J", "")
 
         return J
-    
+
     def _get_filename(self):
         """
         Class method returning a filename.

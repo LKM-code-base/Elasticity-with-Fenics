@@ -318,9 +318,7 @@ class NeoHookeIncompressible(ElasticLaw):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * p * inv(C)
-        # with psi_iso = mu / 2 * (dlfn.tr(C_iso) - 3) (p. 247, eq. 6.146) we
-        # get S_iso = d/dC_iso psi_iso =  mu * Identity
-        S_iso = self._I
+        S_iso = J ** (- 2 / 3) * self._I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
         S = S_vol + S_iso
 
         dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
@@ -362,9 +360,7 @@ class NeoHookeIncompressible(ElasticLaw):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * pressure * inv(C)
-        # with psi_iso = mu / 2 * (dlfn.tr(C_iso) - 3) (p. 247, eq. 6.146) we
-        # get S_iso = d/dC_iso psi_iso =  mu * Identity
-        S_iso = self._I
+        S_iso = J ** (- 2 / 3) * self._I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
         S = S_vol + S_iso
 
         # dimensionless Cauchy stress tensor (symbolic)

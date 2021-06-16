@@ -142,7 +142,7 @@ class ElasticitySolver(SolverBase):
     def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
         print(polynomial_degree)
         assert (elastic_law.compressiblity_type != "Incompressible" or polynomial_degree >= 2)
-        
+
         if elastic_law.compressiblity_type == "Compressible":
             self._sub_space_association = {0: "displacement"}
         elif elastic_law.compressiblity_type == "Incompressible":
@@ -412,7 +412,7 @@ class ElasticitySolver(SolverBase):
 
         self._setup_function_spaces()
         self._setup_boundary_conditions()
-        
+
         # volume element
         self._dV = dlfn.Measure("dx", domain=self._mesh)
         self._dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
@@ -480,9 +480,9 @@ class ElasticitySolver(SolverBase):
         self._Form = self._dw_int - self._dw_ext
         self._J_newton = dlfn.derivative(self._Form, self._solution)
         self._problem = dlfn.NonlinearVariationalProblem(self._Form,
-                                                            self._solution,
-                                                            self._dirichlet_bcs,
-                                                            J=self._J_newton)
+                                                         self._solution,
+                                                         self._dirichlet_bcs,
+                                                         J=self._J_newton)
         # setup linear variational solver
         self._solver = dlfn.NonlinearVariationalSolver(self._problem)
 
