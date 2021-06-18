@@ -540,7 +540,7 @@ def test_hyper_rectangle(top_displacement=-0.1, dim=3, source="Holzapfel"):
     return (dlfn.assemble(stress_tensor[hyper_rectangle_test._space_dim - 1, hyper_rectangle_test._space_dim - 1] * dV) / V)
 
 def test_hyper_rectangle_iteration(source="Holzapfel"):
-    displacements = np.linspace(-0.7, 0.5, num=30)
+    displacements = np.linspace(-0.4, 3.0, num=12)
     stresses = []
     for displacement in displacements:
         stresses.append(test_hyper_rectangle(top_displacement=displacement, source=source))
@@ -577,11 +577,11 @@ def test_dirichlet():
 
 
 if __name__ == "__main__":
-    test_tensile_test()
-    test_shear_test()
-    test_body_force()
-    test_bc_function()
-    test_cylinder()
-    test_dirichlet()
-    test_hyper_rectangle(source="Belytschko")
-    test_hyper_rectangle_iteration(source="Abaqus")
+    #test_tensile_test()
+    #test_shear_test()
+    #test_body_force()
+    #test_bc_function()
+    #test_cylinder()
+    #test_dirichlet()
+    #test_hyper_rectangle(source="Belytschko")
+    test_hyper_rectangle_iteration(source="Holzapfel")
