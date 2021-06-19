@@ -14,7 +14,6 @@ class ProblemBase:
     _suffix = ".xdmf"
 
     def __init__(self, elastic_law, main_dir=None):
-
         # set elastic law
         assert isinstance(elastic_law, ElasticLaw)
         self._elastic_law = elastic_law
@@ -316,10 +315,10 @@ class ElasticProblem(ProblemBase):
             if "bref" in cleaned_kwargs.keys():
                 cleaned_kwargs.pop("bref")
             elastic_moduli = compute_elasticity_coefficients(**cleaned_kwargs)
-            lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
-            mu = elastic_moduli[ElasticModuli.ShearModulus]
+            self._lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
+            self._mu = elastic_moduli[ElasticModuli.ShearModulus]
             # 1st dimensionless coefficient
-            self._C = lmbda / mu
+            self._C = self._lmbda / self._mu
 
             # 2nd optional dimensionless coefficient
             if "lref" in kwargs.keys() and "bref" in kwargs.keys():
@@ -334,7 +333,7 @@ class ElasticProblem(ProblemBase):
                 assert isfinite(bref)
                 assert bref > 0.0
                 # 2nd optional dimensionless coefficient
-                self._D = bref * lref / mu
+                self._D = bref * lref / self._mu
 
             else:
                 self._D = None
@@ -397,6 +396,9 @@ class ElasticProblem(ProblemBase):
             self._elastic_solver.set_dimensionless_numbers(self._C, self._D)
         else:
             self._elastic_solver.set_dimensionless_numbers(self._C)
+
+        # pass Lamé parameters
+        self._elastic_solver.set_lame_parameters(self._mu, self._lmbda)
 
         # pass body force
         if hasattr(self, "_body_force"):

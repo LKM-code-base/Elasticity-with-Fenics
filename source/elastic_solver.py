@@ -101,6 +101,13 @@ class SolverBase:
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
+    def set_lame_parameters(self):
+        """
+        Purely virtual method to update the parameters of the model by creating or modifying class
+        objects.
+        """
+        raise NotImplementedError("You are calling a purely virtual method.")
+
     def _setup_function_spaces(self):
         """
         Virtual class method setting up function spaces.
@@ -402,6 +409,21 @@ class ElasticitySolver(SolverBase):
             else:
                 self._D.assign(D)
 
+    def set_lame_parameters(self, mu, lmbda):
+        """
+        Updates the Lamé parameters of the model by creating or modifying class
+        objects.
+        """
+        if not hasattr(self, "_mu"):
+            self._mu = dlfn.Constant(mu)
+        else:
+            self._mu.assign(mu)
+
+        if not hasattr(self, "_lmbda"):
+            self._lmbda = dlfn.Constant(lmbda)
+        else:
+            self._lmbda.assign(lmbda)
+
     def _setup_problem(self):
         """
         Method setting up solver objects of the stationary problem.
@@ -418,7 +440,7 @@ class ElasticitySolver(SolverBase):
         self._dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
 
         # setup the parameters for the elastic law
-        self._elastic_law.set_parameters(self._mesh, self._C)
+        self._elastic_law.set_parameters(self._mesh, self._C, self._mu, self._lmbda)
 
         if self._elastic_law.compressiblity_type == "Compressible":
             # creating test function
