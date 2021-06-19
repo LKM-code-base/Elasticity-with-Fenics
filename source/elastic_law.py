@@ -9,7 +9,7 @@ class ElasticLaw:
     def __init__(self):
         pass
 
-    def set_parameters(self, mesh, elastic_ratio, mu, lmbda):
+    def set_parameters(self, mesh, elastic_ratio):
 
         assert isinstance(mesh, dlfn.Mesh)
         self._mesh = mesh
@@ -21,8 +21,6 @@ class ElasticLaw:
         assert isinstance(elastic_ratio, (dlfn.Constant, float))
         assert float(elastic_ratio) > 0.
         self._elastic_ratio = elastic_ratio
-        self._mu = mu
-        self._lmbda = lmbda
 
     def dw_int(self, u, v):
         raise NotImplementedError("You are calling a purely virtual method.")
