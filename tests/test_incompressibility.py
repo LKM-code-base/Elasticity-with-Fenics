@@ -5,7 +5,7 @@ from grid_generator import hyper_cube
 from grid_generator import HyperCubeBoundaryMarkers
 from elastic_problem import ElasticProblem
 from elastic_solver import DisplacementBCType
-from elastic_law import NeoHookeIncompressible
+from elastic_law import NeoHooke, NeoHookeIncompressible
 import dolfin as dlfn
 
 
@@ -30,7 +30,8 @@ class TensileTest(ElasticProblem):
         elif self._bc_type == "pointwise":
             self._problem_name = "TensileTestPointwise"
 
-        self.set_parameters(C=1.e4, D=1.)
+        # self.set_parameters(C=1.e4, D=1.)
+        self.set_parameters(E=210., nu=0.3)
 
     def setup_mesh(self):
         # create mesh
@@ -80,7 +81,7 @@ class TensileTest(ElasticProblem):
 
 
 def test_tensile_test():
-    for elastic_law in [NeoHookeIncompressible()]:
+    for elastic_law in [NeoHooke(), NeoHookeIncompressible()]:
         for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
             tensile_test = TensileTest(25, elastic_law, bc_type=bc_type)
             print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")

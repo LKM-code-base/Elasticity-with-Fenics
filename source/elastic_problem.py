@@ -252,13 +252,9 @@ class ElasticProblem(ProblemBase):
             # displacement vector
             displacement = solver.solution
 
-            # compute cauchy stress
-            stress = self._elastic_law.postprocess_cauchy_stress(displacement)
         elif self._elastic_law.compressiblity_type == "Incompressible":
             # displacement vector and pressure
             displacement, pressure = solver.solution.split(True)
-            # compute cauchy stress
-            stress = self._elastic_law.postprocess_cauchy_stress(displacement, pressure)
 
         # compute volume ratio
         J = dlfn.det(dlfn.Identity(self._space_dim) + dlfn.grad(displacement))
