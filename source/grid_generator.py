@@ -66,12 +66,16 @@ class CircularBoundary(dlfn.SubDomain):
         assert(isinstance(kwargs["mesh"], dlfn.Mesh))
         assert(isinstance(kwargs["radius"], float) and kwargs["radius"] > 0.0)
         self._hmin = kwargs["mesh"].hmin()
+        self._space_dim = kwargs["mesh"].geometry().dim()
         self._radius = kwargs["radius"]
 
     def inside(self, x, on_boundary):
         # tolerance: half length of smallest element
         tol = self._hmin / 2.
-        result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius) < tol
+        if self._space_dim == 2:
+            result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius) < tol
+        elif self._space_dim == 3:
+            result = abs(math.sqrt(x[0]**2 + x[1]**2 + x[2]**2) - self._radius) < tol
         return result and on_boundary
 
 

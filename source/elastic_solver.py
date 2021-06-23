@@ -140,7 +140,6 @@ class ElasticitySolver(SolverBase):
     _null_scalar = dlfn.Constant(0.)
 
     def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
-        print(polynomial_degree)
         assert (elastic_law.compressiblity_type != "Incompressible" or polynomial_degree >= 2)
 
         if elastic_law.compressiblity_type == "Compressible":
@@ -187,7 +186,7 @@ class ElasticitySolver(SolverBase):
             # distinguish between full or component-wise boundary conditions
             if len(bc) == 3:
                 # full boundary condition
-                assert isinstance(bc[2], (dlfn.Expression, tuple, list)) or bc[2] is None
+                # TO DO: assert isinstance(bc[2], (dlfn.Expression, tuple, list)) or bc[2] is None
                 if isinstance(bc[2], dlfn.Expression):
                     # check rank of expression
                     assert bc[2].value_rank() == 1
@@ -470,7 +469,7 @@ class ElasticitySolver(SolverBase):
                     self._dw_ext += const_function * self._v[component_index] * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function:
-                    assert isinstance(traction, dlfn.Expression)
+                    # TO DO: assert isinstance(traction, dlfn.Expression)
                     self._dw_ext += dot(traction, self._v) * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function_component:
