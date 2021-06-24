@@ -274,6 +274,41 @@ class ElasticProblem(ProblemBase):
 
         return J
 
+    def _compute_pressure(self):
+        """
+        Returns the pressure.
+        """
+        sigma = self._compute_stress_tensor()
+        p = dlfn.Constant(1. / 3.) * dlfn.tr(sigma)
+
+        solver = self._get_solver()
+
+        assert hasattr(self, "_elastic_law")
+
+        if self._elastic_law.compressiblity_type == "Compressible":
+            # displacement vector
+            displacement = solver.solution
+
+        elif self._elastic_law.compressiblity_type == "Incompressible":
+            # displacement vector and pressure
+            displacement, pressure = solver.solution.split(True)
+
+        # create function space
+        family = displacement.ufl_function_space().ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_function_space().ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemJ = dlfn.FiniteElement("DG", cell, degree - 1)
+
+        Ph = dlfn.FunctionSpace(self._mesh, elemJ)
+
+        # project
+        p = dlfn.project(p, Ph)
+        p.rename("p", "")
+
+        return p
+
     def _get_filename(self):
         """
         Class method returning a filename.

@@ -163,7 +163,7 @@ class BalloonTest(ElasticProblem):
         self._n_refinements = n_refinments
         self._problem_name = "BalloonTest"
 
-        self.set_parameters(E=210.0, nu=0.3)
+        self.set_parameters(E=1.0, nu=0.3)
 
     def setup_mesh(self):
         # create mesh
@@ -178,14 +178,14 @@ class BalloonTest(ElasticProblem):
         if self._space_dim == 2:
             gamma01 = PointSubDomain((0.0, -1.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
-                        (TractionBCType.function, SphericalAnnulusBoundaryMarkers.interior_boundary.value, dlfn.Constant(-0.2) * n),
-                        (TractionBCType.function, SphericalAnnulusBoundaryMarkers.exterior_boundary.value, dlfn.Constant(-0.1) * n)]
+                        (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
+                        (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
 
         if self._space_dim == 3:
             gamma01 = PointSubDomain((0.0, 0.0, -1.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
-                        (TractionBCType.function, SphericalAnnulusBoundaryMarkers.interior_boundary.value, dlfn.Constant(-0.2) * n),
-                        (TractionBCType.function, SphericalAnnulusBoundaryMarkers.exterior_boundary.value, dlfn.Constant(-0.1) * n)]
+                        (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
+                        (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
 
     def postprocess_solution(self):
         # compute stresses
@@ -199,6 +199,7 @@ class BalloonTest(ElasticProblem):
             stress.rename("S{0}{1}".format(*component_indices[k]), "")
             self._add_to_field_output(stress)
         self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
         # compute volume average of the stress tensor
         dV = dlfn.Measure("dx", domain=self._mesh)
         V = dlfn.assemble(dlfn.Constant(1.0) * dV)

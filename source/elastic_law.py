@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import dolfin as dlfn
-from ufl import inv
+from ufl import inv, cofac
 from dolfin import grad, inner
 
 
@@ -221,6 +221,8 @@ class NeoHooke(ElasticLaw):
 
         # deformation gradient
         F = self._I + grad(u)
+        # normal transform
+        self._normal_transform = inv(F.T) * dlfn.FacetNormal(self._mesh)
         # right Cauchy-Green tensor
         C = F.T * F
         # volume ratio
@@ -309,6 +311,8 @@ class NeoHookeIncompressible(ElasticLaw):
 
         # deformation gradient
         F = self._I + grad(u)
+        # normal transform
+        self._normal_transform = cofac(F) * dlfn.FacetNormal(self._mesh)
         # volume ratio
         J = dlfn.det(F)
         # right Cauchy-Green tensor

@@ -27,6 +27,7 @@ class TractionBCType(Enum):
     function = auto()
     function_component = auto()
     free = auto()
+    constant_pressure = auto()
 
 
 class SolverBase:
@@ -476,6 +477,9 @@ class ElasticitySolver(SolverBase):
                     assert isinstance(traction, dlfn.Expression)
                     self._dw_ext += traction * self._v[component_index] * self._dA(bndry_id)
 
+                elif bc_type is TractionBCType.constant_pressure:
+                    assert isinstance(traction, float)
+                    self._dw_ext += traction * dot(self._elastic_law._normal_transform, self._v) * self._dA(bndry_id)
         self._Form = self._dw_int - self._dw_ext
         self._J_newton = dlfn.derivative(self._Form, self._solution)
         self._problem = dlfn.NonlinearVariationalProblem(self._Form,
