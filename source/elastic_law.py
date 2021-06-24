@@ -312,7 +312,7 @@ class NeoHookeIncompressible(ElasticLaw):
         # deformation gradient
         F = self._I + grad(u)
         # normal transform
-        self._normal_transform = cofac(F) * dlfn.FacetNormal(self._mesh)
+        self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
         # volume ratio
         J = dlfn.det(F)
         # right Cauchy-Green tensor

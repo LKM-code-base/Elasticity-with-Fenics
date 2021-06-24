@@ -3,8 +3,8 @@
 from ufl.operators import dot
 from auxiliary_classes import PointSubDomain
 from auxiliary_methods import boundary_normal
-from grid_generator import hyper_cube, hyper_rectangle, spherical_shell
-from grid_generator import HyperCubeBoundaryMarkers, SphericalAnnulusBoundaryMarkers
+from grid_generator import hyper_cube, hyper_rectangle, spherical_shell, half_spherical_shell
+from grid_generator import HyperCubeBoundaryMarkers, SphericalAnnulusBoundaryMarkers, SphericalHalfAnnulusBoundaryMarkers
 from elastic_problem import ElasticProblem
 from elastic_solver import DisplacementBCType, TractionBCType
 from elastic_law import NeoHooke, NeoHookeIncompressible, MooneyRivlinIncompressible
@@ -210,6 +210,69 @@ class BalloonTest(ElasticProblem):
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
+class HalfBalloonTest(ElasticProblem):
+    # def init(self, elastic_law, n_points=25, top_displacement=0.1, dim=3, main_dir=None, polynomial_degree=2):
+    #    super().init(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+    def __init__(self, n_refinments, elastic_law, main_dir=None, dim=3, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._n_refinements = n_refinments
+        self._problem_name = "BalloonTest"
+
+        self.set_parameters(E=1.0, nu=0.3)
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = half_spherical_shell(2, (0.8, 1.0), self._n_refinements)
+        elif self._space_dim == 3:
+            self._mesh, self._boundary_markers = half_spherical_shell(3, (0.9, 1.0), self._n_refinements)
+
+    def set_boundary_conditions(self):
+        n = dlfn.FacetNormal(self._mesh)
+
+        if self._space_dim == 2:
+            gamma01 = PointSubDomain((1.0, 0.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                        (DisplacementBCType.fixed_component, SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 1, None),
+                        (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, - 0.3),
+                        (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
+
+        if self._space_dim == 3:
+            gamma01 = PointSubDomain((1.0, 0.0, 0.0), tol=1e-10)
+            gamma02 = PointSubDomain((-1.0, 0.0, 0.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                        (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
+                        (DisplacementBCType.fixed_component, SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
+                        (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.2),
+                        (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value, -0.1)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(self.space_dim):
+            for j in range(self.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+
 def test_tensile_test():
     for elastic_law in [NeoHooke(), NeoHookeIncompressible(), MooneyRivlinIncompressible()]:
         for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
@@ -249,8 +312,12 @@ def test_ballon(dim=2):
     ballon_test = BalloonTest(0, NeoHookeIncompressible(), dim=dim)
     ballon_test.solve_problem()
 
+def test_half_ballon(dim=2):
+    ballon_test = HalfBalloonTest(0, NeoHookeIncompressible(), dim=dim)
+    ballon_test.solve_problem()
+
 if __name__ == "__main__":
     # test_tensile_test()
     # test_hyper_rectangle()
     # test_J_convergence()
-    test_ballon(dim=2)
+    test_half_ballon(dim=3)
