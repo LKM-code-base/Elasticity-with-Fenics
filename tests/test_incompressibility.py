@@ -244,11 +244,16 @@ class HalfBalloonTest(ElasticProblem):
         if self._space_dim == 3:
             gamma01 = PointSubDomain((1.0, 0.0, 0.0), tol=1e-10)
             gamma02 = PointSubDomain((-1.0, 0.0, 0.0), tol=1e-10)
-            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
-                        (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
+            gamma03 = PointSubDomain((0.0, 1.0, 0.0), tol=1e-10)
+            gamma04 = PointSubDomain((0.0, -1.0, 0.0), tol=1e-10)
+            self._bcs = [#(DisplacementBCType.fixed_pointwise, gamma01, None),
+                        (DisplacementBCType.fixed_component_pointwise, gamma01, 1, None),
+                        (DisplacementBCType.fixed_component_pointwise, gamma02, 1, None),
+                        (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
+                        (DisplacementBCType.fixed_component_pointwise, gamma04, 0, None),
                         (DisplacementBCType.fixed_component, SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
-                        (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.2),
-                        (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value, -0.1)]
+                        (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.13)]
+                        #(TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value, -0.1)]
 
     def postprocess_solution(self):
         # compute stresses

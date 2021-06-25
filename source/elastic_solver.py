@@ -28,6 +28,7 @@ class TractionBCType(Enum):
     function_component = auto()
     free = auto()
     constant_pressure = auto()
+    function_pressure = auto()
 
 
 class SolverBase:
@@ -187,7 +188,7 @@ class ElasticitySolver(SolverBase):
             # distinguish between full or component-wise boundary conditions
             if len(bc) == 3:
                 # full boundary condition
-                # TO DO: assert isinstance(bc[2], (dlfn.Expression, tuple, list)) or bc[2] is None
+                assert isinstance(bc[2], (dlfn.Expression, tuple, list, float)) or bc[2] is None
                 if isinstance(bc[2], dlfn.Expression):
                     # check rank of expression
                     assert bc[2].value_rank() == 1
@@ -470,7 +471,7 @@ class ElasticitySolver(SolverBase):
                     self._dw_ext += const_function * self._v[component_index] * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function:
-                    # TO DO: assert isinstance(traction, dlfn.Expression)
+                    assert isinstance(traction, dlfn.Expression)
                     self._dw_ext += dot(traction, self._v) * self._dA(bndry_id)
 
                 elif bc_type is TractionBCType.function_component:
@@ -480,6 +481,11 @@ class ElasticitySolver(SolverBase):
                 elif bc_type is TractionBCType.constant_pressure:
                     assert isinstance(traction, float)
                     self._dw_ext += traction * dot(self._elastic_law._normal_transform, self._v) * self._dA(bndry_id)
+
+                elif bc_type is TractionBCType.function_pressure:
+                    assert isinstance(traction, dlfn.Expression)
+                    self._dw_ext += traction * dot(self._elastic_law._normal_transform, self._v) * self._dA(bndry_id)
+
         self._Form = self._dw_int - self._dw_ext
         self._J_newton = dlfn.derivative(self._Form, self._solution)
         self._problem = dlfn.NonlinearVariationalProblem(self._Form,
