@@ -177,10 +177,9 @@ def half_spherical_shell(dim, radii, n_refinements=0):
         center = dlfn.Point(0., 0., 0.)
 
     if dim == 2:
-        domain = Circle(center, ro) \
-            - Rectangle(dlfn.Point(-ro, -ro), dlfn.Point(ro, 0.)) \
-            - Circle(center, ri)
-        mesh = generate_mesh(domain, 30)
+        mesh = dlfn.Mesh()   
+        f = dlfn.XDMFFile(f"{getcwd()}/meshes/arc.xdmf")
+        f.read(mesh)
     elif dim == 3:
         mesh = dlfn.Mesh()   
         f = dlfn.XDMFFile(f"{getcwd()}/meshes/hemisphere.xdmf")

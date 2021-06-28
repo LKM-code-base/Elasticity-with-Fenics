@@ -278,12 +278,12 @@ class ElasticProblem(ProblemBase):
         """
         Returns the pressure.
         """
+        assert hasattr(self, "_elastic_law")
+
         sigma = self._compute_stress_tensor()
-        p = dlfn.Constant(1. / 3.) * dlfn.tr(sigma)
+        p = 1. / self._space_dim * dlfn.tr(sigma)
 
         solver = self._get_solver()
-
-        assert hasattr(self, "_elastic_law")
 
         if self._elastic_law.compressiblity_type == "Compressible":
             # displacement vector
@@ -299,9 +299,9 @@ class ElasticProblem(ProblemBase):
         degree = displacement.ufl_function_space().ufl_element().degree()
         assert degree >= 0
         cell = self._mesh.ufl_cell()
-        elemJ = dlfn.FiniteElement("DG", cell, degree - 1)
+        elemP = dlfn.FiniteElement("DG", cell, degree - 1)
 
-        Ph = dlfn.FunctionSpace(self._mesh, elemJ)
+        Ph = dlfn.FunctionSpace(self._mesh, elemP)
 
         # project
         p = dlfn.project(p, Ph)

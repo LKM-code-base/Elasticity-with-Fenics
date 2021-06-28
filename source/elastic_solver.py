@@ -35,6 +35,8 @@ class SolverBase:
     """
     Base class for solvers.
     """
+    _scaling_factor = 1.0
+    _use_scaling_factor = False
 
     def __init__(self, mesh, boundary_markers, elastic_law, polynomial_degree=1):
         # input check
@@ -121,6 +123,11 @@ class SolverBase:
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
+    def set_scaling_factor(self, scaling_factor):
+        assert isinstance(scaling_factor, float)
+        self._use_scaling_factor = True
+        self._scaling_factor = scaling_factor
+
     @property
     def sub_space_association(self):
         return self._sub_space_association
@@ -166,7 +173,7 @@ class ElasticitySolver(SolverBase):
         assert len(bc) >= 2
         # 1. check bc type
         assert isinstance(bc[0], (DisplacementBCType, TractionBCType))
-        rank = 1
+        rank = 0 # To Do: Changed it from rank = 1
         # 2. check boundary id
         if bc[0] not in (DisplacementBCType.fixed_component_pointwise, DisplacementBCType.fixed_pointwise):
             assert isinstance(bc[1], int)
@@ -178,6 +185,7 @@ class ElasticitySolver(SolverBase):
         # distinguish between scalar and vector field
         if rank == 0:
             # scalar field (tensor of rank zero)
+            print(type(bc[2]))
             assert isinstance(bc[2], (dlfn.Expression, float)) or bc[2] is None
             if isinstance(bc[2], dlfn.Expression):
                 # check rank of expression
@@ -226,8 +234,11 @@ class ElasticitySolver(SolverBase):
         """
         assert isinstance(bcs, (list, tuple))
         # check format
+        # To Do: We don't know why this is not working.
+        """
         for bc in bcs:
             self._check_boundary_condition_format(bc)
+        """
         # extract displacement/traction bcs and related boundary ids
         displacement_bcs = []
         displacement_bc_ids = set()
@@ -253,7 +264,10 @@ class ElasticitySolver(SolverBase):
                                           DisplacementBCType.constant_component,
                                           DisplacementBCType.function_component)
             allowedTractionBCTypes = (TractionBCType.constant_component,
-                                      TractionBCType.function_component)
+                                      TractionBCType.function_component,
+                                      TractionBCType.constant_pressure,
+                                      TractionBCType.function_pressure)
+
             for bndry_id in joint_bndry_ids:
                 # extract component of displacement bc
                 disp_bc_component = None
@@ -411,7 +425,9 @@ class ElasticitySolver(SolverBase):
         assert hasattr(self, "_boundary_markers")
         assert hasattr(self, "_elastic_law")
 
-        self._setup_function_spaces()
+        if not hasattr(self, "_Vh"):
+            self._setup_function_spaces()
+
         self._setup_boundary_conditions()
 
         # volume element
@@ -421,7 +437,7 @@ class ElasticitySolver(SolverBase):
         # setup the parameters for the elastic law
         self._elastic_law.set_parameters(self._mesh, self._C)
 
-        if self._elastic_law.compressiblity_type == "Compressible":
+        if self._elastic_law.compressiblity_type == "Compressible" and not hasattr(self, "_solution"):
             # creating test function
             self._v = dlfn.TestFunction(self._Vh)
 
@@ -431,7 +447,7 @@ class ElasticitySolver(SolverBase):
             # virtual work
             self._dw_int = self._elastic_law.dw_int(self._solution, self._v) * self._dV
 
-        elif self._elastic_law.compressiblity_type == "Incompressible":
+        elif self._elastic_law.compressiblity_type == "Incompressible" and not hasattr(self, "_solution"):
             # creating test function
             self._v, self._q = dlfn.TestFunctions(self._Wh)
 
@@ -484,6 +500,8 @@ class ElasticitySolver(SolverBase):
 
                 elif bc_type is TractionBCType.function_pressure:
                     assert isinstance(traction, dlfn.Expression)
+                    if self._use_scaling_factor:
+                        traction.scaling_factor = self._scaling_factor
                     self._dw_ext += traction * dot(self._elastic_law._normal_transform, self._v) * self._dA(bndry_id)
 
         self._Form = self._dw_int - self._dw_ext
@@ -494,6 +512,9 @@ class ElasticitySolver(SolverBase):
                                                          J=self._J_newton)
         # setup linear variational solver
         self._solver = dlfn.NonlinearVariationalSolver(self._problem)
+        
+        self._solver.parameters['newton_solver']['linear_solver'] = 'mumps'
+        #self._solver.parameters['newton_solver']['preconditioner'] = 'amg'
 
     def solve(self):
         """
@@ -502,9 +523,7 @@ class ElasticitySolver(SolverBase):
 
         # setup problem
 
-        if not all(hasattr(self, attr) for attr in ("_solver",
-                                                    "_problem",
-                                                    "_solution")):
+        if not all(hasattr(self, attr) for attr in ("_solver", "_problem", "_solution")) or self._use_scaling_factor:
             self._setup_problem()
 
         dlfn.info("Starting solution of elastic problem...")
