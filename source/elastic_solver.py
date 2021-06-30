@@ -561,10 +561,7 @@ class ElasticitySolver(SolverBase):
 
         dlfn.info("Starting solution of elastic problem...")
         #self._solver.solve()
-        t0 = dlfn.Timer("assemble_system")
         self._solver.solve(self._problem, self._solution.vector())
-        dlfn.del(t0)
-        dlfn.list_timings()
 
 class Problem(dlfn.NonlinearProblem):
     def __init__(self, J, J_pc, F, bcs):
