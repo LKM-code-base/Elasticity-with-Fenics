@@ -506,6 +506,37 @@ class ElasticitySolver(SolverBase):
 
         self._Form = self._dw_int - self._dw_ext
         self._J_newton = dlfn.derivative(self._Form, self._solution)
+
+        I = dlfn.Identity(self._space_dim)
+        # deformation gradient
+        F = I + dlfn.grad(self._u)
+        # normal transform
+        from ufl import inv
+        # volume ratio
+        J = dlfn.det(F)
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # right Cauchy-Green tensor for isochoric deformation
+        # C_iso = J ** (- 2 / 3) * C
+
+        # 2. Piola-Kirchhoff stress
+        S = J ** (- 2 / 3) * I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
+
+        dE = dlfn.Constant(0.5) * (F.T * dlfn.grad(self._v) + dlfn.grad(self._v).T * F)
+
+        A =  dlfn.inner(S, dE) * self._dV
+
+        #self._du, self._dp = dlfn.TestFunctions(self._Wh)
+
+        P1 = A#dlfn.derivative(A, self._u, self._v)
+        P2 = self._p * self._q * self._dV
+
+        B = P1 + P2
+        self._P = dlfn.derivative(B, self._solution)
+        #self._P = dlfn.inner(dlfn.grad(self._du), dlfn.grad(self._v))*dlfn.dx
+
+        self._problem = Problem(self._J_newton, self._P, self._Form, self._dirichlet_bcs)
+        """
         self._problem = dlfn.NonlinearVariationalProblem(self._Form,
                                                          self._solution,
                                                          self._dirichlet_bcs,
@@ -515,6 +546,8 @@ class ElasticitySolver(SolverBase):
         
         self._solver.parameters['newton_solver']['linear_solver'] = 'mumps'
         #self._solver.parameters['newton_solver']['preconditioner'] = 'amg'
+        """
+        self._solver = CustomSolver(self._mesh)
 
     def solve(self):
         """
@@ -527,4 +560,48 @@ class ElasticitySolver(SolverBase):
             self._setup_problem()
 
         dlfn.info("Starting solution of elastic problem...")
-        self._solver.solve()
+        #self._solver.solve()
+        t0 = dlfn.Timer("assemble_system")
+        self._solver.solve(self._problem, self._solution.vector())
+        dlfn.del(t0)
+        dlfn.list_timings()
+
+class Problem(dlfn.NonlinearProblem):
+    def __init__(self, J, J_pc, F, bcs):
+        self.bilinear_form = J
+        self.preconditioner_form = J_pc
+        self.linear_form = F
+        self.bcs = bcs
+        dlfn.NonlinearProblem.__init__(self)
+
+    def F(self, b, x):
+        pass
+
+    def J(self, A, x):
+        pass
+
+    def form(self, A, P, b, x):
+        dlfn.assemble(self.linear_form, tensor=b)
+        dlfn.assemble(self.bilinear_form, tensor=A)
+        dlfn.assemble(self.preconditioner_form, tensor=P)
+        for bc in self.bcs:
+            bc.apply(b, x)
+            bc.apply(A)
+            bc.apply(P)
+
+
+class CustomSolver(dlfn.NewtonSolver):
+    def __init__(self, mesh):
+        self._mesh = mesh
+        dlfn.NewtonSolver.__init__(self, self._mesh.mpi_comm(),
+                              dlfn.PETScKrylovSolver(), dlfn.PETScFactory.instance())
+
+    def solver_setup(self, A, P, problem, iteration):
+        self.linear_solver().set_operators(A, P)
+
+        dlfn.PETScOptions.set("ksp_type", "gmres")
+        dlfn.PETScOptions.set("pc_type", "hypre")
+        dlfn.PETScOptions.set("ksp_view")
+        dlfn.PETScOptions.set("ksp_monitor")
+
+        self.linear_solver().set_from_options()

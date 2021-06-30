@@ -535,5 +535,5 @@ if __name__ == "__main__":
     # test_tensile_test()
     # test_hyper_rectangle()
     # test_J_convergence()
-    test_half_ballon(dim=3)
+    test_half_ballon(dim=2)
     #test_scaling_half_ballon(dim=2)
