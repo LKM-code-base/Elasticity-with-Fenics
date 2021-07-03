@@ -371,6 +371,55 @@ class NeoHookeIncompressible(ElasticLaw):
         sigma = (F * S * F.T) / J
 
         return sigma
+    
+    def preconditioner(self, u, p, v, q, dV):
+        """
+        Construct preconditioner for iterative solver.
+
+        Parameters
+        ----------
+        u : Function
+            Displacement.
+        p : Function
+            Pressure.
+        v : TestFunction
+            Displacement.
+        q : TestFunction
+            Pressure.
+
+        Returns
+        -------
+        Form
+            Preconditioner.
+        """
+
+        # u, p Functions
+        # assert isinstance(u, dlfn.function.function.Function)
+        # assert isinstance(p, dlfn.function.function.Function)
+        # v, q TestFunctions
+        # assert isinstance(v, dlfn.function.argument.Argument)
+        # assert isinstance(q, dlfn.function.argument.Argument)
+
+        assert hasattr(self, "_elastic_ratio")
+        assert hasattr(self, "_I")
+
+        # deformation gradient
+        F = self._I + grad(u)
+        # normal transform
+        self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
+        # volume ratio
+        J = dlfn.det(F)
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # right Cauchy-Green tensor for isochoric deformation
+        # C_iso = J ** (- 2 / 3) * C
+
+        # Preconditioner
+        A = J ** (- 2 / 3) * self._I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
+
+        dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
+
+        return (inner(A, dE) + p * q) * dV
 
 
 class MooneyRivlinIncompressible(ElasticLaw):

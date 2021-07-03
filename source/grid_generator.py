@@ -170,20 +170,14 @@ def half_spherical_shell(dim, radii, n_refinements=0):
 
     assert isinstance(n_refinements, int) and n_refinements >= 0
 
-    # mesh generation
     if dim == 2:
-        center = dlfn.Point(0., 0.)
+        mesh = dlfn.Mesh()
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/arc.xdmf") as infile:
+            infile.read(mesh)   
     elif dim == 3:
-        center = dlfn.Point(0., 0., 0.)
-
-    if dim == 2:
-        mesh = dlfn.Mesh()   
-        f = dlfn.XDMFFile(f"{getcwd()}/meshes/arc.xdmf")
-        f.read(mesh)
-    elif dim == 3:
-        mesh = dlfn.Mesh()   
-        f = dlfn.XDMFFile(f"{getcwd()}/meshes/hemisphere.xdmf")
-        f.read(mesh)
+        mesh = dlfn.Mesh()
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/hemisphere.xdmf") as infile:
+            infile.read(mesh)
     assert dim == mesh.topology().dim()
 
     # mesh refinement
@@ -210,6 +204,34 @@ def half_spherical_shell(dim, radii, n_refinements=0):
 
     return mesh, facet_marker
 
+
+def tire(dim, n_refinements=0):
+    """
+    Creates the mesh of a spherical shell using the mshr module.
+    """
+    assert isinstance(dim, int)
+    assert dim == 2
+
+    assert isinstance(n_refinements, int) and n_refinements >= 0
+
+    if dim == 2:
+        mesh = dlfn.Mesh()
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire.xdmf") as infile:
+            infile.read(mesh)
+
+    assert dim == mesh.topology().dim()
+
+    # mesh refinement
+    for i in range(n_refinements):
+        mesh = dlfn.refine(mesh)
+
+    if dim == 2:
+        mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() -1)
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire_facet_markers.xdmf") as infile:
+            infile.read(mvc, "facet_markers")
+        facet_marker = dlfn.cpp.mesh.MeshFunctionSizet(mesh, mvc)
+
+    return mesh, facet_marker
 
 def hyper_cube(dim, n_points=10):
     assert isinstance(dim, int)

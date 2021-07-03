@@ -5,7 +5,7 @@ from grid_generator import hyper_rectangle
 from grid_generator import spherical_shell
 from grid_generator import hyper_simplex
 from grid_generator import cylinder
-
+from grid_generator import tire
 
 def test_hyper_cube():
     # two-dimensional case
@@ -43,6 +43,9 @@ def test_cylinder():
     # three-dimensional case
     _, _ = cylinder(3, (0.3, 1.0), 3.0)
 
+def test_tire():
+    # two-dimensional case
+    _, _ = tire(2)
 
 if __name__ == "__main__":
     test_hyper_cube()
@@ -50,3 +53,4 @@ if __name__ == "__main__":
     test_spherical_shell()
     test_hyper_simplex()
     test_cylinder()
+    test_tire()
