@@ -405,7 +405,6 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
         ufile = dlfn.File(f"{getcwd()}/results/velocity.pvd")
         pfile = dlfn.File(f"{getcwd()}/results/pressure.pvd")
         import numpy as np
-        import matplotlib.pyplot as plt
         linRange = np.linspace(0.0, 1.0, num=11, endpoint=True)
         print(linRange)
         for load_scaling in linRange:

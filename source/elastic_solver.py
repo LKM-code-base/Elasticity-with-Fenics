@@ -173,7 +173,8 @@ class ElasticitySolver(SolverBase):
         assert len(bc) >= 2
         # 1. check bc type
         assert isinstance(bc[0], (DisplacementBCType, TractionBCType))
-        rank = 0 # To Do: Changed it from rank = 1
+        # To Do: Changed it from rank = 1
+        rank = 0
         # 2. check boundary id
         if bc[0] not in (DisplacementBCType.fixed_component_pointwise, DisplacementBCType.fixed_pointwise):
             assert isinstance(bc[1], int)
@@ -234,8 +235,8 @@ class ElasticitySolver(SolverBase):
         """
         assert isinstance(bcs, (list, tuple))
         # check format
-        # To Do: We don't know why this is not working.
         """
+        # To Do: We don't know why this is not working.
         for bc in bcs:
             self._check_boundary_condition_format(bc)
         """
