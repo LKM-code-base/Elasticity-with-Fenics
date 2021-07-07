@@ -7,6 +7,7 @@ from grid_generator import hyper_simplex
 from grid_generator import cylinder
 from grid_generator import tire
 
+
 def test_hyper_cube():
     # two-dimensional case
     _, _ = hyper_cube(2, 8)
@@ -43,9 +44,13 @@ def test_cylinder():
     # three-dimensional case
     _, _ = cylinder(3, (0.3, 1.0), 3.0)
 
+
 def test_tire():
     # two-dimensional case
     _, _ = tire(2)
+    # three-dimensional case
+    _, _ = tire(3)
+
 
 if __name__ == "__main__":
     test_hyper_cube()

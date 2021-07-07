@@ -515,21 +515,22 @@ class ElasticitySolver(SolverBase):
                 A = self._elastic_law.preconditioner(self._u, self._p, self._v, self._q, self._dV)
                 self._P = dlfn.derivative(A, self._solution)
                 self._problem = PreconditionedNonlinearVariationalProblem(self._Form,
-                                                                self._solution,
-                                                                self._dirichlet_bcs,
-                                                                self._J_newton,
-                                                                self._P)
+                                                                          self._solution,
+                                                                          self._dirichlet_bcs,
+                                                                          self._J_newton,
+                                                                          self._P)
                 # setup preconditioned nonlinear variational solver
                 self._solver = PreconditionedNonlinearVariationalSolver(self._problem)
             else:
                 self._problem = dlfn.NonlinearVariationalProblem(self._Form,
-                                                                self._solution,
-                                                                self._dirichlet_bcs,
-                                                                J=self._J_newton)
+                                                                 self._solution,
+                                                                 self._dirichlet_bcs,
+                                                                 J=self._J_newton)
                 # setup nonlinear variational solver
                 self._solver = dlfn.NonlinearVariationalSolver(self._problem)
-                #self._solver.parameters['newton_solver']['linear_solver'] = 'mumps'
-            dlfn.info("Time to setup elastic problem: "  + timeToStr(t.elapsed()[0]))
+                # self._solver.parameters['newton_solver']['linear_solver'] = 'mumps'
+
+            dlfn.info("Time to setup elastic problem: " + timeToStr(t.elapsed()[0]))
 
     def solve(self):
         with dlfn.Timer() as t:
@@ -550,7 +551,7 @@ class ElasticitySolver(SolverBase):
 
 
 class PreconditionedNonlinearVariationalProblem(dlfn.NonlinearProblem):
-    
+
     def __init__(self, Form, solution, bcs, J, P):
         self.linear_form = Form
         self.solution = solution
@@ -582,17 +583,17 @@ class PreconditionedNonlinearVariationalSolver(dlfn.NewtonSolver):
         self._solution = self._problem.solution
         self._mesh = self._solution.function_space().mesh()
         dlfn.NewtonSolver.__init__(self, self._mesh.mpi_comm(),
-                              dlfn.PETScKrylovSolver(), dlfn.PETScFactory.instance())
+                                   dlfn.PETScKrylovSolver(), dlfn.PETScFactory.instance())
 
     def solver_setup(self, A, P, problem, iteration):
         self.linear_solver().set_operators(A, P)
 
         dlfn.PETScOptions.set("ksp_type", "gmres")
         dlfn.PETScOptions.set("pc_type", "hypre")
-        #dlfn.PETScOptions.set("pc_hypre_boomeramg_cycle_type", "w")
-        #dlfn.PETScOptions.set("pc_hypre_boomeramg_print_statistics", "1")
-        #dlfn.PETScOptions.set("ksp_view")
-        #dlfn.PETScOptions.set("ksp_monitor")
+        # dlfn.PETScOptions.set("pc_hypre_boomeramg_cycle_type", "w")
+        # dlfn.PETScOptions.set("pc_hypre_boomeramg_print_statistics", "1")
+        # dlfn.PETScOptions.set("ksp_view")
+        # dlfn.PETScOptions.set("ksp_monitor")
 
         self.linear_solver().set_from_options()
 

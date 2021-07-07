@@ -371,7 +371,7 @@ class NeoHookeIncompressible(ElasticLaw):
         sigma = (F * S * F.T) / J
 
         return sigma
-    
+
     def preconditioner(self, u, p, v, q, dV):
         """
         Construct preconditioner for iterative solver.
