@@ -439,12 +439,19 @@ class TireTest(ElasticProblem):
         # create mesh
         if self._space_dim == 2:
             self._mesh, self._boundary_markers = tire(2, self._n_refinements)
+        if self._space_dim == 3:
+            self._mesh, self._boundary_markers = tire(3, self._n_refinements)
 
     def set_boundary_conditions(self):
 
         if self._space_dim == 2:
-            self._bcs = [(DisplacementBCType.fixed, 300, None),
-                        (TractionBCType.constant_pressure, 200, - 0.1)]
+            self._bcs = [(DisplacementBCType.fixed, 301, None),
+                        (TractionBCType.constant_pressure, 100, - 0.01)]
+        if self._space_dim == 3:
+            self._bcs = [(DisplacementBCType.fixed, 301, None),
+                        (DisplacementBCType.fixed_component, 1000, 2, None),
+                        (DisplacementBCType.fixed_component, 2000, 1, None),
+                        (TractionBCType.constant_pressure, 100, - 0.01)]
 
     def postprocess_solution(self):
         # compute stresses
@@ -524,6 +531,6 @@ if __name__ == "__main__":
     # test_tensile_test()
     # test_hyper_rectangle()
     # test_J_convergence()
-    test_half_ballon(dim=2)
+    # test_half_ballon(dim=2)
     # test_scaling_half_ballon(dim=2)
-    # test_tire()
+    test_tire(dim = 2)

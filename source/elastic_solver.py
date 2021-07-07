@@ -6,7 +6,7 @@ from enum import Enum, auto
 import dolfin as dlfn
 from dolfin import dot
 
-from auxiliary_methods import extract_all_boundary_markers
+from auxiliary_methods import extract_all_boundary_markers, timeToStr
 from elastic_law import ElasticLaw
 
 
@@ -528,8 +528,8 @@ class ElasticitySolver(SolverBase):
                                                                 J=self._J_newton)
                 # setup nonlinear variational solver
                 self._solver = dlfn.NonlinearVariationalSolver(self._problem)
-            
-            dlfn.info("Time to setup elastic problem: %f s" %t.elapsed()[0])
+                #self._solver.parameters['newton_solver']['linear_solver'] = 'mumps'
+            dlfn.info("Time to setup elastic problem: "  + timeToStr(t.elapsed()[0]))
 
     def solve(self):
         with dlfn.Timer() as t:
@@ -546,7 +546,7 @@ class ElasticitySolver(SolverBase):
 
             self._solver.solve()
 
-            dlfn.info("Time to solve elastic problem: %f s" %t.elapsed()[0])
+            dlfn.info("Time to solve elastic problem: " + timeToStr(t.elapsed()[0]))
 
 
 class PreconditionedNonlinearVariationalProblem(dlfn.NonlinearProblem):

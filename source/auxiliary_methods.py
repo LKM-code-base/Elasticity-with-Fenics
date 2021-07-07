@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import dolfin as dlfn
-from math import isfinite, sqrt
+from math import isfinite, sqrt, modf
 from enum import Enum, auto
 
 __all__ = ["boundary_normal", "compute_elasticity_coefficients"]
@@ -262,3 +262,15 @@ def extract_all_boundary_markers(mesh, mesh_function):
         if f.exterior():
             boundary_markers.add(mesh_function[f])
     return boundary_markers
+
+
+def timeToStr(totalTime):
+    millis, sec = modf(totalTime)
+    millis = round(millis, 3) * 1000
+    sec, millis = int(sec), int(millis)
+    if sec < 1:
+        return f"{millis}ms"
+    elif sec < 60.0:
+        return f"{sec}s {millis}ms"
+    else:
+        return f"{sec // 60}min {(sec % 60)}s {millis}ms"
