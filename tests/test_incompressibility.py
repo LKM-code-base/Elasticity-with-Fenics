@@ -459,6 +459,7 @@ class TireTest(ElasticProblem):
             self._add_to_field_output(stress)
         self._add_to_field_output(self._compute_volume_ratio())
         self._add_to_field_output(self._compute_pressure())
+        self._add_to_field_output(self._compute_equiv_stresses())
         # compute volume average of the stress tensor
         dV = dlfn.Measure("dx", domain=self._mesh)
         V = dlfn.assemble(dlfn.Constant(1.0) * dV)
