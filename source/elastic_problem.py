@@ -38,7 +38,10 @@ class ProblemBase:
         """
         if not hasattr(self, "_additional_field_output"):
             self._additional_field_output = []
-        self._additional_field_output.append(field)
+        if isinstance(field, (tuple, list)):
+            self._additional_field_output = [*self._additional_field_output, *field]
+        else:
+            self._additional_field_output.append(field)
 
     def _compute_stress_tensor(self):  # pragma: no cover
         """
@@ -55,6 +58,12 @@ class ProblemBase:
     def _compute_strain_tensor(self):  # pragma: no cover
         """
         Returns the strain tensor.
+        """
+        raise NotImplementedError("You are calling a purely virtual method.")
+
+    def _compute_equiv_stresses(self):
+        """
+        Returns the equivalent stresses.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
@@ -216,10 +225,10 @@ class ElasticProblem(ProblemBase):
             # compute cauchy stress
             stress = self._elastic_law.cauchy_stress(displacement)
         elif self._elastic_law.compressiblity_type == "Incompressible":
-            # displacement vector and pressure
-            displacement, pressure = solver.solution.split(True)
+            # displacement vector and Langrange multiplier p
+            displacement, p = solver.solution.split(True)
             # compute cauchy stress
-            stress = self._elastic_law.cauchy_stress(displacement, pressure)
+            stress = self._elastic_law.cauchy_stress(displacement, p)
 
         # create function space
         family = displacement.ufl_function_space().ufl_element().family()
@@ -252,8 +261,8 @@ class ElasticProblem(ProblemBase):
             displacement = solver.solution
 
         elif self._elastic_law.compressiblity_type == "Incompressible":
-            # displacement vector and pressure
-            displacement, pressure = solver.solution.split(True)
+            # displacement vector and Lagrange multiplier
+            displacement, p = solver.solution.split(True)
 
         # compute volume ratio
         J = dlfn.det(dlfn.Identity(self._space_dim) + dlfn.grad(displacement))
@@ -281,17 +290,16 @@ class ElasticProblem(ProblemBase):
         assert hasattr(self, "_elastic_law")
 
         sigma = self._compute_stress_tensor()
-        p = 1. / self._space_dim * dlfn.tr(sigma)
+        pressure = 1. / self._space_dim * dlfn.tr(sigma)
 
         solver = self._get_solver()
-
         if self._elastic_law.compressiblity_type == "Compressible":
             # displacement vector
             displacement = solver.solution
 
         elif self._elastic_law.compressiblity_type == "Incompressible":
-            # displacement vector and pressure
-            displacement, pressure = solver.solution.split(True)
+            # displacement vector and Lagrange multiplier p
+            displacement, p = solver.solution.split(True)
 
         # create function space
         family = displacement.ufl_function_space().ufl_element().family()
@@ -304,10 +312,57 @@ class ElasticProblem(ProblemBase):
         Ph = dlfn.FunctionSpace(self._mesh, elemP)
 
         # project
-        p = dlfn.project(p, Ph)
-        p.rename("p", "")
+        pressure = dlfn.project(pressure, Ph)
+        pressure.rename("pressure", "")
 
-        return p
+        return pressure
+
+    def _compute_equiv_stresses(self):
+        """
+        Returns the equivalent stresses.
+        """
+        assert hasattr(self, "_elastic_law")
+
+        sigma = self._compute_stress_tensor()
+        Identity = dlfn.Identity(self._space_dim)
+
+        sigma_sph = 1. / self._space_dim * dlfn.tr(sigma) * Identity
+        sigma_dev = sigma - sigma_sph
+
+        sigma_euc = dlfn.sqrt(dlfn.inner(sigma, sigma))
+        sigma_sph_euc = dlfn.sqrt(dlfn.inner(sigma_sph, sigma_sph))
+        sigma_dev_euc = dlfn.sqrt(dlfn.inner(sigma_dev, sigma_dev))
+
+        solver = self._get_solver()
+        if self._elastic_law.compressiblity_type == "Compressible":
+            # displacement vector
+            displacement = solver.solution
+
+        elif self._elastic_law.compressiblity_type == "Incompressible":
+            # displacement vector and Lagrange multiplier p
+            displacement, p = solver.solution.split(True)
+
+        # create function space
+        family = displacement.ufl_function_space().ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_function_space().ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemP = dlfn.FiniteElement("DG", cell, degree - 1)
+
+        Ph = dlfn.FunctionSpace(self._mesh, elemP)
+
+        # project
+        sigma_euc = dlfn.project(sigma_euc, Ph)
+        sigma_euc.rename("sigma_euc", "")
+
+        sigma_sph_euc = dlfn.project(sigma_sph_euc, Ph)
+        sigma_sph_euc.rename("sigma_sph_euc", "")
+
+        sigma_dev_euc = dlfn.project(sigma_dev_euc, Ph)
+        sigma_dev_euc.rename("sigma_dev_euc", "")
+
+        return sigma_euc, sigma_sph_euc, sigma_dev_euc
 
     def _get_filename(self):
         """

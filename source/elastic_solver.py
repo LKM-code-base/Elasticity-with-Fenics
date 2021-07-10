@@ -154,7 +154,7 @@ class ElasticitySolver(SolverBase):
         if elastic_law.compressiblity_type == "Compressible":
             self._sub_space_association = {0: "displacement"}
         elif elastic_law.compressiblity_type == "Incompressible":
-            self._sub_space_association = {0: "displacement", 1: "pressure"}
+            self._sub_space_association = {0: "displacement", 1: "p"}
 
         self._field_association = {value: key for key, value in self._sub_space_association.items()}
 
