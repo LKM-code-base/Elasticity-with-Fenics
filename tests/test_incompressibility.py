@@ -5,7 +5,7 @@ from grid_generator import hyper_cube, hyper_rectangle, spherical_shell, half_sp
 from grid_generator import HyperCubeBoundaryMarkers, SphericalAnnulusBoundaryMarkers, SphericalHalfAnnulusBoundaryMarkers
 from elastic_problem import ElasticProblem
 from elastic_solver import DisplacementBCType, TractionBCType, ElasticitySolver
-from elastic_law import NeoHooke, NeoHookeIncompressible, MooneyRivlinIncompressible
+from elastic_law import NeoHookeIncompressible, MooneyRivlinIncompressible
 import dolfin as dlfn
 
 
@@ -454,7 +454,7 @@ class TireTest(ElasticProblem):
 
 
 def test_tensile_test():
-    for elastic_law in [NeoHooke(), NeoHookeIncompressible(), MooneyRivlinIncompressible()]:
+    for elastic_law in [NeoHookeIncompressible(), MooneyRivlinIncompressible()]:
         for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
             tensile_test = TensileTest(25, elastic_law, bc_type=bc_type)
             print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
