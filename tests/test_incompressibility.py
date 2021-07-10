@@ -30,8 +30,7 @@ class TensileTest(ElasticProblem):
         elif self._bc_type == "pointwise":
             self._problem_name = "TensileTestPointwise"
 
-        # self.set_parameters(C=1.e4, D=1.)
-        self.set_parameters(E=210., nu=0.3)
+        self.set_parameters(E=5.0, nu=0.5)
 
     def setup_mesh(self):
         # create mesh
@@ -83,8 +82,6 @@ class TensileTest(ElasticProblem):
 
 
 class HyperRectangleTest(ElasticProblem):
-    # def init(self, elastic_law, n_points=25, top_displacement=0.1, dim=3, main_dir=None, polynomial_degree=2):
-    #    super().init(elastic_law, main_dir, polynomial_degree=polynomial_degree)
     def __init__(self, n_points, elastic_law, main_dir=None, dim=3, top_displacement=0.1, polynomial_degree=2):
         super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
 
@@ -94,7 +91,7 @@ class HyperRectangleTest(ElasticProblem):
         self._n_points = n_points
         self._problem_name = "HyperRectangleTest"
 
-        self.set_parameters(E=210.0, nu=0.3)
+        self.set_parameters(E=5.0, nu=0.5)
 
         self._top_displacement = top_displacement
 
@@ -159,7 +156,7 @@ class BalloonTest(ElasticProblem):
         self._n_refinements = n_refinments
         self._problem_name = "BalloonTest"
 
-        self.set_parameters(E=1.0, nu=0.3)
+        self.set_parameters(E=5.0, nu=0.5)
 
     def setup_mesh(self):
         # create mesh
@@ -214,7 +211,7 @@ class HalfBalloonTest(ElasticProblem):
         self._n_refinements = n_refinments
         self._problem_name = "BalloonTest"
 
-        self.set_parameters(E=1.0, nu=0.3)
+        self.set_parameters(E=5.0, nu=0.5)
 
     def setup_mesh(self):
         # create mesh
@@ -259,22 +256,6 @@ class HalfBalloonTest(ElasticProblem):
             for j in range(self.space_dim):
                 avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
-        """
-        # compute surface average of the Lagrange Multiplier
-        dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
-        A_inner = dlfn.assemble(dlfn.Constant(1.0) * dA(SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value))
-        A_outer = dlfn.assemble(dlfn.Constant(1.0) * dA(SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value))
-        solver = self._get_solver()
-        displacement, pressure = solver.solution.split(True)
-        print("Volume-averaged Lagrange Multiplier: ")
-        avg_pressure_inner = dlfn.assemble(pressure * dA(SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value)) / A_inner
-        avg_pressure_outer = dlfn.assemble(pressure * dA(SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value)) / A_outer
-        print("Avg. Lagrange Multiplier inner:")
-        print(avg_pressure_inner)
-        print("Avg. Lagrange Multiplier outer:")
-        print(avg_pressure_outer)
-        print()
-        """
 
 
 class IterativeScalingHalfBalloonTest(ElasticProblem):
@@ -287,7 +268,7 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
         self._n_refinements = n_refinments
         self._problem_name = "IterativeScalingBalloonTest"
 
-        self.set_parameters(E=1.0, nu=0.3)
+        self.set_parameters(E=5.0, nu=0.5)
 
     def setup_mesh(self):
         # create mesh
@@ -426,7 +407,7 @@ class TireTest(ElasticProblem):
         self._n_refinements = n_refinments
         self._problem_name = "TireTest"
 
-        self.set_parameters(E=1.0, nu=0.3)
+        self.set_parameters(E=5.0, nu=0.5)
 
     def setup_mesh(self):
         # create mesh
@@ -439,12 +420,14 @@ class TireTest(ElasticProblem):
 
         if self._space_dim == 2:
             self._bcs = [(DisplacementBCType.fixed, 301, None),
-                         (TractionBCType.constant_pressure, 100, - 0.01)]
+                         (TractionBCType.constant_pressure, 200, - 0.001 / 3.0),
+                         (TractionBCType.constant_pressure, 100, - 0.001 / 3.0)]
         if self._space_dim == 3:
             self._bcs = [(DisplacementBCType.fixed, 301, None),
                          (DisplacementBCType.fixed_component, 1000, 2, None),
                          (DisplacementBCType.fixed_component, 2000, 1, None),
-                         (TractionBCType.constant_pressure, 100, - 0.01)]
+                         (TractionBCType.constant_pressure, 200, - 0.001 / 3.0),
+                         (TractionBCType.constant_pressure, 100, - 0.001 / 3.0)]
 
     def postprocess_solution(self):
         # compute stresses
