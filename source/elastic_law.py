@@ -25,7 +25,7 @@ class ElasticLaw:
     def dw_int(self, u, v):
         raise NotImplementedError("You are calling a purely virtual method.")
 
-    def postprocess_cauchy_stress(self, displacement):
+    def cauchy_stress(self, displacement):
         raise NotImplementedError("You are calling a purely virtual method.")
 
     @property
@@ -44,7 +44,13 @@ class ElasticLaw:
         return self._compressiblity_type
 
 
-class Hooke(ElasticLaw):
+class CompressibleElasticLaw(ElasticLaw):
+    def __init__(self):
+        super().__init__()
+        self._compressiblity_type = "Compressible"
+
+
+class Hooke(CompressibleElasticLaw):
     """
     Class to simulate linear elasticity with Hookes law.
     """
@@ -53,7 +59,6 @@ class Hooke(ElasticLaw):
         super().__init__()
         self._linearity_type = "Linear"
         self._name = "Hooke"
-        self._compressiblity_type = "Compressible"
 
     def dw_int(self, u, v):
         """
@@ -81,7 +86,7 @@ class Hooke(ElasticLaw):
 
         return inner(sigma, sym_grad(v))
 
-    def postprocess_cauchy_stress(self, displacement):
+    def cauchy_stress(self, displacement):
         """
         Compute Cauchy stress from given numerical solution.
 
@@ -108,7 +113,7 @@ class Hooke(ElasticLaw):
         return sigma
 
 
-class StVenantKirchhoff(ElasticLaw):
+class StVenantKirchhoff(CompressibleElasticLaw):
     """
     Class to simulate nonlinear elasticity with Saint Vernant-Kirchhoff law.
     """
@@ -117,7 +122,6 @@ class StVenantKirchhoff(ElasticLaw):
         super().__init__()
         self._linearity_type = "Nonlinear"
         self._name = "StVenantKirchhoff"
-        self._compressiblity_type = "Compressible"
 
     def dw_int(self, u, v):
         """
@@ -152,7 +156,7 @@ class StVenantKirchhoff(ElasticLaw):
 
         return inner(S, dE)
 
-    def postprocess_cauchy_stress(self, displacement):
+    def cauchy_stress(self, displacement):
         """
         Compute Cauchy stress from given numerical solution.
 
@@ -189,7 +193,7 @@ class StVenantKirchhoff(ElasticLaw):
         return sigma
 
 
-class NeoHooke(ElasticLaw):
+class NeoHooke(CompressibleElasticLaw):
     """
     Class to simulate nonlinear elasticity with Neo-Hooke law,
     see Holzapfel p. 247.
@@ -199,7 +203,6 @@ class NeoHooke(ElasticLaw):
         super().__init__()
         self._linearity_type = "Nonlinear"
         self._name = "Neo-Hooke"
-        self._compressiblity_type = "Compressible"
 
     def dw_int(self, u, v):
         """
@@ -235,7 +238,7 @@ class NeoHooke(ElasticLaw):
 
         return inner(S, dE)
 
-    def postprocess_cauchy_stress(self, displacement):
+    def cauchy_stress(self, displacement):
         """
         Compute Cauchy stress from given numerical solution.
 
@@ -266,7 +269,14 @@ class NeoHooke(ElasticLaw):
         return sigma
 
 
-class NeoHookeIncompressible(ElasticLaw):
+class IncompressibleElasticLaw(ElasticLaw):
+    def __init__(self):
+        super().__init__()
+        self._linearity_type = "Nonlinear"
+        self._compressiblity_type = "Incompressible"
+
+
+class NeoHookeIncompressible(IncompressibleElasticLaw):
     """
     Class to simulate nonlinear incompressible elasticity with Neo-Hooke law,
     see Holzapfel p. 238 and p. 402.
@@ -274,9 +284,7 @@ class NeoHookeIncompressible(ElasticLaw):
 
     def __init__(self):
         super().__init__()
-        self._linearity_type = "Nonlinear"
         self._name = "Neo-Hooke"
-        self._compressiblity_type = "Incompressible"
 
     def dw_int(self, u, p, v, q):
         """
@@ -329,7 +337,7 @@ class NeoHookeIncompressible(ElasticLaw):
 
         return inner(S, dE) + (J - 1) * q
 
-    def postprocess_cauchy_stress(self, displacement, pressure):
+    def cauchy_stress(self, displacement, pressure):
         """
         Compute Cauchy stress from given numerical solution.
 
@@ -422,7 +430,7 @@ class NeoHookeIncompressible(ElasticLaw):
         return (inner(A, dE) + p * q) * dV
 
 
-class MooneyRivlinIncompressible(ElasticLaw):
+class MooneyRivlinIncompressible(IncompressibleElasticLaw):
     """
     Class to simulate nonlinear incompressible elasticity with Mooney-Rivlin law,
     see Holzapfel p. 238 and p. ??
@@ -430,9 +438,7 @@ class MooneyRivlinIncompressible(ElasticLaw):
 
     def __init__(self):
         super().__init__()
-        self._linearity_type = "Nonlinear"
         self._name = "Mooney-Rivlin"
-        self._compressiblity_type = "Incompressible"
 
     def dw_int(self, u, p, v, q):
         """
@@ -467,6 +473,8 @@ class MooneyRivlinIncompressible(ElasticLaw):
 
         # deformation gradient
         F = self._I + grad(u)
+        # normal transform
+        self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
         # volume ratio
         J = dlfn.det(F)
         # right Cauchy-Green tensor
@@ -487,7 +495,7 @@ class MooneyRivlinIncompressible(ElasticLaw):
 
         return inner(S, dE) + (J - 1) * q
 
-    def postprocess_cauchy_stress(self, displacement, pressure):
+    def cauchy_stress(self, displacement, pressure):
         """
         Compute Cauchy stress from given numerical solution.
 

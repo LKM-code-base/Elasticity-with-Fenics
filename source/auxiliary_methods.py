@@ -64,7 +64,7 @@ def boundary_normal(mesh, facet_markers, bndry_id):
     return tuple(normal[d] for d in range(dim))
 
 
-def compute_elasticity_coefficients(**kwargs):
+def compute_elasticity_coefficients(compressibility_type, **kwargs):
     """
     Compute various elasticity coefficients from the input dictionary.
     For example,
@@ -97,7 +97,10 @@ def compute_elasticity_coefficients(**kwargs):
             return_dict[ElasticModuli.YoungsModulus] = youngs_modulus
 
         elif key == "nu":
-            assert value < 0.5
+            if compressibility_type == "Incompressible":
+                assert value == 0.5
+            elif compressibility_type == "Compressible":
+                assert value < 0.5
             poissons_ratio = value
             return_dict[ElasticModuli.PoissonRatio] = poissons_ratio
 
@@ -124,13 +127,14 @@ def compute_elasticity_coefficients(**kwargs):
         shear_modulus /= 2. * (1. + poissons_ratio)
         return_dict[ElasticModuli.ShearModulus] = shear_modulus
 
-        bulk_modulus = youngs_modulus
-        bulk_modulus /= 3.0 * (1. - 2. * poissons_ratio)
-        return_dict[ElasticModuli.BulkModulus] = bulk_modulus
+        if compressibility_type == "Compressible":
+            bulk_modulus = youngs_modulus
+            bulk_modulus /= 3.0 * (1. - 2. * poissons_ratio)
+            return_dict[ElasticModuli.BulkModulus] = bulk_modulus
 
-        first_lame = youngs_modulus * poissons_ratio
-        first_lame /= ((1. + poissons_ratio) * (1. - 2. * poissons_ratio))
-        return_dict[ElasticModuli.FirstLameParameter] = first_lame
+            first_lame = youngs_modulus * poissons_ratio
+            first_lame /= ((1. + poissons_ratio) * (1. - 2. * poissons_ratio))
+            return_dict[ElasticModuli.FirstLameParameter] = first_lame
 
     elif youngs_modulus is not None and shear_modulus is not None:
         poissons_ratio = youngs_modulus / 2. / shear_modulus - 1.0
@@ -243,7 +247,10 @@ def compute_elasticity_coefficients(**kwargs):
     else:  # pragma: no cover
         raise RuntimeError()
 
-    assert len(return_dict) == 5
+    if compressibility_type == "Compressible":
+        assert len(return_dict) == 5
+    elif compressibility_type == "Incompressible":
+        assert len(return_dict) == 3
     assert all(isinstance(x, float) for x in return_dict.values())
     assert all(isfinite(x) for x in return_dict.values())
 
