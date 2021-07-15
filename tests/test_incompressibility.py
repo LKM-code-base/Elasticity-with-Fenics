@@ -459,6 +459,39 @@ class TireTest(ElasticProblem):
                 avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
+        solver = self._get_solver()
+        dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
+        u, p = solver.solution.split(True)
+
+        from ufl import inv, cofac
+        from dolfin import grad, inner
+        
+        I = dlfn.Identity(self._space_dim)
+        # deformation gradient
+        F = I + grad(u)
+        # normal transform
+        self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
+        # volume ratio
+        J = dlfn.det(F)
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # right Cauchy-Green tensor for isochoric deformation
+        # C_iso = J ** (- 2 / 3) * C
+
+        # 2. Piola-Kirchhoff stress
+        S_vol = J * p * inv(C)
+        S_iso = J ** (- 2 / 3) * I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
+        S = S_vol + S_iso
+
+        sigma = (F * S * F.T) / J
+
+        P = J * sigma * inv(F.T)
+
+        traction_value = dlfn.assemble(dlfn.dot(- 0.001 / 3.0 * self._normal_transform, dlfn.FacetNormal(self._mesh)) * dA(100))
+        piola_part = dlfn.assemble(dlfn.dot(P * dlfn.FacetNormal(self._mesh),dlfn.FacetNormal(self._mesh)) * dA(100))
+
+        print(traction_value)
+        print(piola_part)
 
 def test_tensile_test():
     for elastic_law in [NeoHookeIncompressible(), MooneyRivlinIncompressible()]:
