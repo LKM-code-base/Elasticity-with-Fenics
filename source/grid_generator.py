@@ -205,38 +205,45 @@ def half_spherical_shell(dim, radii, n_refinements=0):
     return mesh, facet_marker
 
 
-def tire(dim, n_refinements=0):
+def tire(dim, type, n_refinements=0):
     """
     Creates the mesh of a spherical shell using the mshr module.
     """
     assert isinstance(dim, int)
     assert dim == 2 or dim == 3
+    assert isinstance(type, str)
+    assert isinstance(n_refinements, int) and n_refinements >= 0 and n_refinements <= 2
 
-    assert isinstance(n_refinements, int) and n_refinements >= 0
-
+    if n_refinements == 0:
+        refinement_type = "_no"
+    elif n_refinements == 1:
+        assert type != "tire3Dquarter"
+        refinement_type = ""
+    elif n_refinements == 2:
+        assert type != "tire3Dquarter"
+        refinement_type = "_mega"
+    
     if dim == 2:
+        assert type == "tire2D"
         mesh = dlfn.Mesh()
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire2D/tire2D_refin/tire2D.xdmf") as infile:
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/{type}{refinement_type}_refin/{type}.xdmf") as infile:
             infile.read(mesh)
     if dim == 3:
+        assert type == "tire3Deight" or type == "tire3Deight_smooth" or type == "tire3Dquarter"
         mesh = dlfn.Mesh()
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/tire3Dquarter/tire3Dquarter_no_refin/tire3Dquarter.xdmf") as infile:
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}/{type}{refinement_type}_refin/{type}.xdmf") as infile:
             infile.read(mesh)
     assert dim == mesh.topology().dim()
 
-    # mesh refinement
-    for i in range(n_refinements):
-        mesh = dlfn.refine(mesh)
-
     if dim == 2:
         mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() -1)
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire2D/tire2D_refin/tire2D_facet_markers.xdmf") as infile:
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
             infile.read(mvc, "facet_markers")
         facet_marker = dlfn.cpp.mesh.MeshFunctionSizet(mesh, mvc)
     
     if dim == 3:
         mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() -1)
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/tire3Dquarter/tire3Dquarter_no_refin/tire3Dquarter_facet_markers.xdmf") as infile:
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}/{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
             infile.read(mvc, "facet_markers")
         facet_marker = dlfn.cpp.mesh.MeshFunctionSizet(mesh, mvc)
 
