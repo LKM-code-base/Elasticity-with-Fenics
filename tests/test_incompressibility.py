@@ -480,7 +480,7 @@ class TireTest(ElasticProblem):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * p * inv(C)
-        S_iso = J ** (- 2 / 3) * I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
+        S_iso = J ** (- 2 / self._space_dim) * I - 1 / self._space_dim * J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
         S = S_vol + S_iso
 
         sigma = (F * S * F.T) / J
@@ -556,4 +556,4 @@ if __name__ == "__main__":
     # test_half_ballon(dim=2)
     # test_scaling_half_ballon(dim=2)
     # test_tire("tire2D", dim=2)
-    test_tire("tire3Deight",n_refinments=0, dim=3)
+    test_tire("tire2D",n_refinments=0, dim=2)

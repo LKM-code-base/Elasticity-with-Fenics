@@ -326,11 +326,11 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
         # right Cauchy-Green tensor
         C = F.T * F
         # right Cauchy-Green tensor for isochoric deformation
-        # C_iso = J ** (- 2 / 3) * C
+        # C_iso = J ** (- 2 / self._space_dim) * C
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * p * inv(C)
-        S_iso = J ** (- 2 / 3) * self._I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
+        S_iso = J ** (- 2 / self._space_dim) * self._I - 1 / self._space_dim * J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
         S = S_vol + S_iso
 
         dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
@@ -372,7 +372,7 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * pressure * inv(C)
-        S_iso = J ** (- 2 / 3) * self._I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
+        S_iso = J ** (- 2 / self._space_dim) * self._I - 1 / self._space_dim * J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
         S = S_vol + S_iso
 
         # dimensionless Cauchy stress tensor (symbolic)
@@ -420,10 +420,10 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
         # right Cauchy-Green tensor
         C = F.T * F
         # right Cauchy-Green tensor for isochoric deformation
-        # C_iso = J ** (- 2 / 3) * C
+        # C_iso = J ** (- 2 / self._space_dim) * C
 
         # Preconditioner
-        A = J ** (- 2 / 3) * self._I - 1 / 3 * J ** (- 2 / 3) * dlfn.tr(C) * inv(C)
+        A = J ** (- 2 / self._space_dim) * self._I - 1 / self._space_dim * J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
 
         dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
 
@@ -480,13 +480,13 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
         # right Cauchy-Green tensor
         C = F.T * F
         # right Cauchy-Green tensor for isochoric deformation
-        C_iso = J ** (- 2 / 3) * C
+        C_iso = J ** (- 2 / self._space_dim) * C
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * p * inv(C)
-        S_iso = 1. / 2. * J ** (- 2. / 3.) * (
+        S_iso = 1. / 2. * J ** (- 2. / self._space_dim) * (
             (1. + dlfn.tr(C_iso)) * self._I
-            - 1. / 3. * (dlfn.tr(C) + dlfn.tr(C)
+            - 1. / self._space_dim * (dlfn.tr(C) + dlfn.tr(C)
                          * dlfn.tr(C_iso) + inner(C, C)) * inv(C) + C
         )
         S = S_vol + S_iso
@@ -528,13 +528,13 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
         # right Cauchy-Green tensor
         C = F.T * F
         # right Cauchy-Green tensor for isochoric deformation
-        C_iso = J ** (- 2 / 3) * C
+        C_iso = J ** (- 2 / self._space_dim) * C
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * pressure * inv(C)
-        S_iso = S_iso = 1. / 2. * J ** (- 2. / 3.) * (
+        S_iso = S_iso = 1. / 2. * J ** (- 2. / self._space_dim) * (
             (1. + dlfn.tr(C_iso)) * self._I
-            - 1. / 3. * (dlfn.tr(C) + dlfn.tr(C)
+            - 1. / self._space_dim * (dlfn.tr(C) + dlfn.tr(C)
                          * dlfn.tr(C_iso) + inner(C, C)) * inv(C) + C
         )
         S = S_vol + S_iso
