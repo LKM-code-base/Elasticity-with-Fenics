@@ -528,7 +528,8 @@ class ElasticitySolver(SolverBase):
                                                                  J=self._J_newton)
                 # setup nonlinear variational solver
                 self._solver = dlfn.NonlinearVariationalSolver(self._problem)
-                self._solver.parameters['newton_solver']['linear_solver'] = 'mumps'
+                if self._n_dofs >= 100000:
+                    self._solver.parameters['newton_solver']['linear_solver'] = 'mumps'
 
             dlfn.info("Time to setup elastic problem: " + timeToStr(t.elapsed()[0]))
 

@@ -398,12 +398,13 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
 
 
 class TireTest(ElasticProblem):
-    def __init__(self, n_refinments, elastic_law, main_dir=None, dim=2, polynomial_degree=2):
+    def __init__(self, tire_type, n_refinments, elastic_law, main_dir=None, dim=2, polynomial_degree=2):
         super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
 
         assert isinstance(dim, int)
         self._space_dim = dim
 
+        self._tire_type = tire_type
         self._n_refinements = n_refinments
         self._problem_name = "TireTest"
 
@@ -412,9 +413,9 @@ class TireTest(ElasticProblem):
     def setup_mesh(self):
         # create mesh
         if self._space_dim == 2:
-            self._mesh, self._boundary_markers = tire(2, self._n_refinements)
+            self._mesh, self._boundary_markers = tire(2, self._tire_type, self._n_refinements)
         if self._space_dim == 3:
-            self._mesh, self._boundary_markers = tire(3, self._n_refinements)
+            self._mesh, self._boundary_markers = tire(3, self._tire_type, self._n_refinements)
 
     def set_boundary_conditions(self):
 
@@ -428,6 +429,12 @@ class TireTest(ElasticProblem):
                          (DisplacementBCType.fixed_component, 2000, 1, None),
                          (TractionBCType.constant_pressure, 200, - 0.001 / 3.0),
                          (TractionBCType.constant_pressure, 100, - 0.001 / 3.0)]
+            if self._tire_type == "tire3Deight":
+                # At test with eights of a tire add additional BC on cuttingplane at middle
+                self._bcs.append((DisplacementBCType.fixed_component, 3000, 0, None))
+            elif self._tire_type == "tire3Deight_smooth":
+                # At test with eights of a tire add additional BC on cuttingplane at middle
+                self._bcs.append((DisplacementBCType.fixed_component, 600, 0, None))
 
     def postprocess_solution(self):
         # compute stresses
@@ -504,8 +511,8 @@ def test_scaling_half_ballon(dim=2):
     ballon_test.solve_problem()
 
 
-def test_tire(dim=2):
-    tire_test = TireTest(0, NeoHookeIncompressible(), dim=dim)
+def test_tire(tire_type, n_refinments=0, dim=2):
+    tire_test = TireTest(tire_type, n_refinments, NeoHookeIncompressible(), dim=dim)
     tire_test.solve_problem()
 
 
@@ -515,4 +522,5 @@ if __name__ == "__main__":
     # test_J_convergence()
     # test_half_ballon(dim=2)
     # test_scaling_half_ballon(dim=2)
-    test_tire(dim=2)
+    # test_tire("tire2D", dim=2)
+    test_tire("tire3Deight",n_refinments=0, dim=3)

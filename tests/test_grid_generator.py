@@ -47,9 +47,14 @@ def test_cylinder():
 
 def test_tire():
     # two-dimensional case
-    _, _ = tire(2)
+    for n_refinements in range(3):
+        _, _ = tire(2,"tire2D", n_refinements=n_refinements)
     # three-dimensional case
-    _, _ = tire(3)
+    for type in ["tire3Deight","tire3Deight_smooth"]:
+        for n_refinements in range(3):
+            _, _ = tire(3,type, n_refinements=n_refinements)
+    
+    _, _ = tire(3, "tire3Dquarter")
 
 
 if __name__ == "__main__":
