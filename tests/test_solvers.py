@@ -272,7 +272,7 @@ class DirichletTest(ElasticProblem):
         self._n_points = n_points
         self._problem_name = "DirichletTest"
 
-        self.set_parameters(C=1.5, D=1.)
+        self.set_parameters(C=1.5, D=1., B=1.)
 
     def setup_mesh(self):
         # create mesh
@@ -494,9 +494,9 @@ def test_dirichlet():
 
 
 if __name__ == "__main__":
-    test_tensile_test()
-    test_shear_test()
-    test_body_force()
-    test_bc_function()
-    test_cylinder()
+    # test_tensile_test()
+    # test_shear_test()
+    # test_body_force()
+    # test_bc_function()
+    # test_cylinder()
     test_dirichlet()

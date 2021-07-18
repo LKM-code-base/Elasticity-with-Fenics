@@ -278,7 +278,7 @@ class ElasticProblem(ProblemBase):
         Sh = dlfn.FunctionSpace(self._mesh, elemJ)
 
         # project
-        J = dlfn.project(J, Sh)
+        J = dlfn.interpolate(J, Sh)
         J.rename("J", "")
 
         return J
@@ -323,24 +323,25 @@ class ElasticProblem(ProblemBase):
         """
         assert hasattr(self, "_elastic_law")
 
-        sigma = self._compute_stress_tensor()
+        solver = self._get_solver()
+        if self._elastic_law.compressiblity_type == "Compressible":
+            # displacement vector
+            displacement = solver.solution
+            sigma = self._elastic_law.cauchy_stress(displacement)
+
+        elif self._elastic_law.compressiblity_type == "Incompressible":
+            # displacement vector and Lagrange multiplier p
+            displacement, p = solver.solution.split(True)
+            sigma = self._elastic_law.cauchy_stress(displacement, p)
+
         Identity = dlfn.Identity(self._space_dim)
 
         sigma_sph = 1. / self._space_dim * dlfn.tr(sigma) * Identity
         sigma_dev = sigma - sigma_sph
 
-        sigma_euc = dlfn.sqrt(dlfn.inner(sigma, sigma))
+        sigma_euc = (dlfn.inner(sigma, sigma))
         sigma_sph_euc = dlfn.sqrt(dlfn.inner(sigma_sph, sigma_sph))
         sigma_dev_euc = dlfn.sqrt(dlfn.inner(sigma_dev, sigma_dev))
-
-        solver = self._get_solver()
-        if self._elastic_law.compressiblity_type == "Compressible":
-            # displacement vector
-            displacement = solver.solution
-
-        elif self._elastic_law.compressiblity_type == "Incompressible":
-            # displacement vector and Lagrange multiplier p
-            displacement, p = solver.solution.split(True)
 
         # create function space
         family = displacement.ufl_function_space().ufl_element().family()
@@ -396,6 +397,13 @@ class ElasticProblem(ProblemBase):
                 assert isfinite(D)
                 assert D > 0.0
                 self._D = D
+            # 34d dimensionless coefficient
+            if "B" in kwargs.keys():
+                B = kwargs["B"]
+                assert isinstance(B, float)
+                assert isfinite(B)
+                assert B > 0.0
+                self._B = B
 
         else:
             # extract elastic moduli
@@ -404,6 +412,8 @@ class ElasticProblem(ProblemBase):
                 cleaned_kwargs.pop("lref")
             if "bref" in cleaned_kwargs.keys():
                 cleaned_kwargs.pop("bref")
+            if "uref" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("uref")
             elastic_moduli = compute_elasticity_coefficients(self._elastic_law.compressiblity_type, **cleaned_kwargs)
             if self._elastic_law.compressiblity_type == "Compressible":
                 lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
@@ -412,7 +422,7 @@ class ElasticProblem(ProblemBase):
             if self._elastic_law.compressiblity_type == "Compressible":
                 self._C = lmbda / mu
             elif self._elastic_law.compressiblity_type == "Incompressible":
-                self._C = 1.0 # This is a dummy variable
+                self._C = 1.0  # This is a dummy variable
 
             # 2nd optional dimensionless coefficient
             if "lref" in kwargs.keys() and "bref" in kwargs.keys():
@@ -431,6 +441,26 @@ class ElasticProblem(ProblemBase):
 
             else:
                 self._D = None
+
+            # 3rd optional dimensionless coefficient
+            if "uref" in kwargs.keys() and "lref" in kwargs.keys():
+                # reference length
+                lref = kwargs["lref"]
+                assert isinstance(lref, float)
+                assert isfinite(lref)
+                assert lref > 0.0
+
+                # reference displacement
+                uref = kwargs["uref"]
+                assert isinstance(uref, float)
+                assert isfinite(uref)
+                assert uref > 0.0
+
+                # 3rd optional dimensionless coefficient
+                self._B = uref / lref
+
+            else:
+                self._B = 1.0
 
     def write_boundary_markers(self):
         """
@@ -494,9 +524,9 @@ class ElasticProblem(ProblemBase):
 
         # pass dimensionless numbers
         if hasattr(self, "_D"):
-            self._get_solver().set_dimensionless_numbers(self._C, self._D)
+            self._get_solver().set_dimensionless_numbers(self._C, self._B, self._D,)
         else:
-            self._get_solver().set_dimensionless_numbers(self._C)
+            self._get_solver().set_dimensionless_numbers(self._C, self._B)
 
         # pass body force
         if hasattr(self, "_body_force"):

@@ -408,7 +408,7 @@ class TireTest(ElasticProblem):
         self._n_refinements = n_refinments
         self._problem_name = "TireTest"
 
-        self.set_parameters(E=5.0, nu=0.5)
+        self.set_parameters(E=5.0, nu=0.5, lref=0.2, uref=0.1)
 
     def setup_mesh(self):
         # create mesh
@@ -468,7 +468,7 @@ class TireTest(ElasticProblem):
         
         I = dlfn.Identity(self._space_dim)
         # deformation gradient
-        F = I + grad(u)
+        F = I + self._B * grad(u)
         # normal transform
         self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
         # volume ratio
@@ -490,8 +490,8 @@ class TireTest(ElasticProblem):
         traction_value = dlfn.assemble(dlfn.dot(- 0.001 / 3.0 * self._normal_transform, dlfn.FacetNormal(self._mesh)) * dA(100))
         piola_part = dlfn.assemble(dlfn.dot(P * dlfn.FacetNormal(self._mesh),dlfn.FacetNormal(self._mesh)) * dA(100))
 
-        print(traction_value)
-        print(piola_part)
+        print(f'traction value: {traction_value}')
+        print(f'piola part: {piola_part}')
 
 def test_tensile_test():
     for elastic_law in [NeoHookeIncompressible(), MooneyRivlinIncompressible()]:
@@ -556,4 +556,4 @@ if __name__ == "__main__":
     # test_half_ballon(dim=2)
     # test_scaling_half_ballon(dim=2)
     # test_tire("tire2D", dim=2)
-    test_tire("tire2D",n_refinments=0, dim=2)
+    test_tire("tire2D", n_refinments=0, dim=2)

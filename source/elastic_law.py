@@ -9,7 +9,7 @@ class ElasticLaw:
     def __init__(self):
         pass
 
-    def set_parameters(self, mesh, elastic_ratio):
+    def set_parameters(self, mesh, elastic_ratio, displacement_ratio):
 
         assert isinstance(mesh, dlfn.Mesh)
         self._mesh = mesh
@@ -21,6 +21,10 @@ class ElasticLaw:
         assert isinstance(elastic_ratio, (dlfn.Constant, float))
         assert float(elastic_ratio) > 0.
         self._elastic_ratio = elastic_ratio
+
+        assert isinstance(displacement_ratio, (dlfn.Constant, float))
+        assert float(displacement_ratio) > 0.
+        self._displacement_ratio = displacement_ratio
 
     def dw_int(self, u, v):
         raise NotImplementedError("You are calling a purely virtual method.")
@@ -141,8 +145,10 @@ class StVenantKirchhoff(CompressibleElasticLaw):
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
+        # displacement gradient
+        H = grad(u)
         # deformation gradient
-        F = self._I + grad(u)
+        F = self._I + self._displacement_ratio * H
         # right Cauchy-Green tensor
         C = F.T * F
 
@@ -173,7 +179,7 @@ class StVenantKirchhoff(CompressibleElasticLaw):
         # displacement gradient
         H = dlfn.grad(displacement)
         # deformation gradient
-        F = self._I + H
+        F = self._I + self._displacement_ratio * H
         # right Cauchy-Green tensor
         C = F.T * F
         # volume ratio
@@ -222,14 +228,16 @@ class NeoHooke(CompressibleElasticLaw):
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
+        # displacement gradient
+        H = grad(u)
         # deformation gradient
-        F = self._I + grad(u)
-        # normal transform
-        self._normal_transform = inv(F.T) * dlfn.FacetNormal(self._mesh)
-        # right Cauchy-Green tensor
-        C = F.T * F
+        F = self._I + self._displacement_ratio * H
         # volume ratio
         J = dlfn.det(F)
+        # normal transform
+        self._normal_transform = J * inv(F.T) * dlfn.FacetNormal(self._mesh)
+        # right Cauchy-Green tensor
+        C = F.T * F
 
         # 2. Piola-Kirchhoff stress
         S = self._I - J ** (-self._elastic_ratio) * inv(C)
@@ -254,7 +262,7 @@ class NeoHooke(CompressibleElasticLaw):
         # displacement gradient
         H = grad(displacement)
         # deformation gradient
-        F = self._I + H
+        F = self._I + self._displacement_ratio * H
         # right Cauchy-Green tensor
         C = F.T * F
         # volume ratio
@@ -317,12 +325,14 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
+        # displacement gradient
+        H = grad(u)
         # deformation gradient
-        F = self._I + grad(u)
-        # normal transform
-        self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
+        F = self._I + self._displacement_ratio * H
         # volume ratio
         J = dlfn.det(F)
+        # normal transform
+        self._normal_transform = J * inv(F.T) * dlfn.FacetNormal(self._mesh)
         # right Cauchy-Green tensor
         C = F.T * F
         # right Cauchy-Green tensor for isochoric deformation
@@ -364,7 +374,7 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
         # displacement gradient
         H = grad(displacement)
         # deformation gradient
-        F = self._I + H
+        F = self._I + self._displacement_ratio * H
         # right Cauchy-Green tensor
         C = F.T * F
         # volume ratio
@@ -411,10 +421,10 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
+        # displacement gradient
+        H = grad(u)
         # deformation gradient
-        F = self._I + grad(u)
-        # normal transform
-        self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
+        F = self._I + self._displacement_ratio * H
         # volume ratio
         J = dlfn.det(F)
         # right Cauchy-Green tensor
@@ -471,8 +481,10 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
         assert hasattr(self, "_elastic_ratio")
         assert hasattr(self, "_I")
 
+        # displacement gradient
+        H = grad(u)
         # deformation gradient
-        F = self._I + grad(u)
+        F = self._I + self._displacement_ratio * H
         # normal transform
         self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
         # volume ratio

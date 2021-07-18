@@ -396,7 +396,7 @@ class ElasticitySolver(SolverBase):
             assert hasattr(self, "_n_cells")
             dlfn.info("Number of cells {0}, number of DoFs: {1} (consisting of {2} solid DoFs and {3} pressure DoFs)".format(self._n_cells, self._n_dofs, self._Vh.dim(), self._Ph.dim()))
 
-    def set_dimensionless_numbers(self, C, D=None):
+    def set_dimensionless_numbers(self, C, B, D=None):
         """
         Updates the parameters of the model by creating or modifying class
         objects.
@@ -408,6 +408,14 @@ class ElasticitySolver(SolverBase):
             self._C = dlfn.Constant(C)
         else:
             self._C.assign(C)
+
+        assert isinstance(B, float)
+        assert isfinite(B)
+        assert B > 0.0
+        if not hasattr(self, "_B"):
+            self._B = dlfn.Constant(B)
+        else:
+            self._B.assign(B)
 
         if D is not None:
             assert isinstance(D, float)
@@ -437,7 +445,7 @@ class ElasticitySolver(SolverBase):
             self._dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
 
             # setup the parameters for the elastic law
-            self._elastic_law.set_parameters(self._mesh, self._C)
+            self._elastic_law.set_parameters(self._mesh, self._C, self._B)
 
             if self._elastic_law.compressiblity_type == "Compressible" and not hasattr(self, "_solution"):
                 # creating test function
