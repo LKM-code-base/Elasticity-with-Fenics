@@ -446,8 +446,15 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
     see Holzapfel p. 238 and p. ??
     """
 
-    def __init__(self):
+    def __init__(self, c1, c2):
         super().__init__()
+
+        assert isinstance(c1, float) and isinstance(c2, float)
+        assert abs(c1 - c2 - 1.0) < 1e-10
+
+        self._c1 = c1
+        self._c2 = c2
+
         self._name = "Mooney-Rivlin"
 
     def dw_int(self, u, p, v, q):
@@ -496,11 +503,14 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * p * inv(C)
-        S_iso = 1. / 2. * J ** (- 2. / self._space_dim) * (
-            (1. + dlfn.tr(C_iso)) * self._I
-            - 1. / self._space_dim * (dlfn.tr(C) + dlfn.tr(C)
-                         * dlfn.tr(C_iso) + inner(C, C)) * inv(C) + C
-        )
+        S_iso = J ** (- 2. / self._space_dim) * (
+            self._c1 * (self._I - 1. / self._space_dim * dlfn.tr(C) * inv(C))
+            - self._c2 * (dlfn.tr(C_iso) * self._I
+                          + 1. / self._space_dim
+                          * (inner(C_iso, C) - dlfn.tr(C) * dlfn.tr(C_iso)) * inv(C) 
+                          - C_iso
+                         )
+                )
         S = S_vol + S_iso
 
         dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
@@ -544,10 +554,13 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * pressure * inv(C)
-        S_iso = S_iso = 1. / 2. * J ** (- 2. / self._space_dim) * (
-            (1. + dlfn.tr(C_iso)) * self._I
-            - 1. / self._space_dim * (dlfn.tr(C) + dlfn.tr(C)
-                         * dlfn.tr(C_iso) + inner(C, C)) * inv(C) + C
+        S_iso = 1. / 2. * J ** (- 2. / self._space_dim) * (
+            self._c1 * (1. - dlfn.tr(C)) * inv(C)
+            - self._c2 * (dlfn.tr(C_iso) * self._I
+                          + 1. / self._space_dim
+                          * (inner(C_iso, C) - dlfn.tr(C) * dlfn.tr(C_iso)) * inv(C) 
+                          - C_iso
+                         )
         )
         S = S_vol + S_iso
 

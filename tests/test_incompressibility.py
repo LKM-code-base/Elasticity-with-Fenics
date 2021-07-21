@@ -493,6 +493,51 @@ class TireTest(ElasticProblem):
         print(f'traction value: {traction_value}')
         print(f'piola part: {piola_part}')
 
+
+class IterativeTireTest(ElasticProblem):
+    def __init__(self, tire_type, n_refinments, elastic_law, p_diff, main_dir=None, dim=2, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._tire_type = tire_type
+        self._p_diff = p_diff
+        self._n_refinements = n_refinments
+        self._problem_name = "TireTest"
+
+        self.set_parameters(E=2.7, nu=0.5)
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = tire(2, self._tire_type, self._n_refinements)
+        if self._space_dim == 3:
+            self._mesh, self._boundary_markers = tire(3, self._tire_type, self._n_refinements)
+
+    def set_boundary_conditions(self):
+
+        if self._space_dim == 2:
+            self._bcs = [(DisplacementBCType.fixed, 301, None),
+                         (TractionBCType.constant_pressure, 200, - self._p_diff),
+                         (TractionBCType.constant_pressure, 100, - self._p_diff)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
+        self._add_to_field_output(self._compute_equiv_stresses())
+
+
 def test_tensile_test():
     for elastic_law in [NeoHookeIncompressible(), MooneyRivlinIncompressible()]:
         for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
@@ -548,6 +593,29 @@ def test_tire(tire_type, n_refinments=0, dim=2):
     tire_test = TireTest(tire_type, n_refinments, NeoHookeIncompressible(), dim=dim)
     tire_test.solve_problem()
 
+def iterative_test_tire():
+    import numpy as np
+
+    linRange = np.linspace(0.0, 10.0, num=101, endpoint=True)
+    displacements = []
+    for p in linRange:
+        print(f"Pressure difference is: {p} bar")
+        tire_test = IterativeTireTest("tire2D", 0, MooneyRivlinIncompressible(7./8., -1./8.), p * 0.001 / 9.0)
+        tire_test.solve_problem()
+        solver = tire_test._get_solver()
+        u,_ = solver.solution.split(True)
+        from math import sqrt
+        displacement = u((0.0, 0.79))
+        displacements.append(sqrt(displacement[0]**2 + displacement[1]**2))
+        print()
+    transformed_displacements = 0.2 * np.array(displacements)
+
+    for i, p in enumerate(linRange):
+        print(f"{p} {transformed_displacements[i]}")
+    import matplotlib.pyplot as plt
+    plt.plot(linRange, transformed_displacements)
+    plt.show()
+
 
 if __name__ == "__main__":
     # test_tensile_test()
@@ -556,4 +624,5 @@ if __name__ == "__main__":
     # test_half_ballon(dim=2)
     # test_scaling_half_ballon(dim=2)
     # test_tire("tire2D", dim=2)
-    test_tire("tire2D", n_refinments=0, dim=2)
+    #test_tire("tire2D", n_refinments=0, dim=2)
+    iterative_test_tire()

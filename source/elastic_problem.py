@@ -278,7 +278,7 @@ class ElasticProblem(ProblemBase):
         Sh = dlfn.FunctionSpace(self._mesh, elemJ)
 
         # project
-        J = dlfn.interpolate(J, Sh)
+        J = dlfn.project(J, Sh)
         J.rename("J", "")
 
         return J
