@@ -212,16 +212,13 @@ def tire(dim, type, n_refinements=0):
     assert isinstance(dim, int)
     assert dim == 2 or dim == 3
     assert isinstance(type, str)
-    assert isinstance(n_refinements, int) and n_refinements >= 0 and n_refinements <= 2
+    assert isinstance(n_refinements, int) and n_refinements >= 0 and n_refinements <= 1
 
     if n_refinements == 0:
         refinement_type = "_no"
     elif n_refinements == 1:
-        assert type != "tire3Dquarter"
+        assert type == "tire3Deight"
         refinement_type = ""
-    elif n_refinements == 2:
-        assert type != "tire3Dquarter"
-        refinement_type = "_mega"
     
     if dim == 2:
         assert type == "tire2D"
@@ -229,7 +226,7 @@ def tire(dim, type, n_refinements=0):
         with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/{type}{refinement_type}_refin/{type}.xdmf") as infile:
             infile.read(mesh)
     if dim == 3:
-        assert type == "tire3Deight" or type == "tire3Deight_smooth" or type == "tire3Dquarter"
+        assert type == "tire3Deight" or type == "tire3Dquarter"
         mesh = dlfn.Mesh()
         with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}/{type}{refinement_type}_refin/{type}.xdmf") as infile:
             infile.read(mesh)

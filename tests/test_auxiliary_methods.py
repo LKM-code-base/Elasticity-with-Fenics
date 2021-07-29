@@ -8,6 +8,7 @@ from auxiliary_methods import ElasticModuli
 from auxiliary_methods import boundary_normal
 from auxiliary_methods import compute_elasticity_coefficients
 from auxiliary_methods import extract_all_boundary_markers
+from elastic_law import CompressibleElasticLaw
 import math
 
 
@@ -80,6 +81,7 @@ def test_boundary_normal():
 
 
 def test_elasticity_coefficients():
+    compressibility_type = CompressibleElasticLaw().compressiblity_type
     E = 210.0
     nu = 0.3
     lmbda = nu * E / (1. + nu) / (1. - 2. * nu)
@@ -93,38 +95,38 @@ def test_elasticity_coefficients():
                        ElasticModuli.FirstLameParameter: lmbda}
 
     tol = 5.0e-13
-    computed_values = compute_elasticity_coefficients(E=E, nu=nu)
+    computed_values = compute_elasticity_coefficients(compressibility_type, E=E, nu=nu)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(E=E, K=K)
+    computed_values = compute_elasticity_coefficients(compressibility_type, E=E, K=K)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(E=E, G=mu)
+    computed_values = compute_elasticity_coefficients(compressibility_type, E=E, G=mu)
     compare_dicts(expected_values, computed_values, tol=tol)
-    computed_values = compute_elasticity_coefficients(E=E, mu=mu)
-    compare_dicts(expected_values, computed_values, tol=tol)
-
-    computed_values = compute_elasticity_coefficients(E=E, lmbda=lmbda)
-    compare_dicts(expected_values, computed_values, tol=tol)
-    computed_values = compute_elasticity_coefficients(E=E, firstLame=lmbda)
+    computed_values = compute_elasticity_coefficients(compressibility_type, E=E, mu=mu)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(nu=nu, K=K)
+    computed_values = compute_elasticity_coefficients(compressibility_type, E=E, lmbda=lmbda)
+    compare_dicts(expected_values, computed_values, tol=tol)
+    computed_values = compute_elasticity_coefficients(compressibility_type, E=E, firstLame=lmbda)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(nu=nu, G=mu)
+    computed_values = compute_elasticity_coefficients(compressibility_type, nu=nu, K=K)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(nu=nu, lmbda=lmbda)
+    computed_values = compute_elasticity_coefficients(compressibility_type, nu=nu, G=mu)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(lmbda=lmbda, mu=mu)
+    computed_values = compute_elasticity_coefficients(compressibility_type, nu=nu, lmbda=lmbda)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(lmbda=lmbda, K=K)
+    computed_values = compute_elasticity_coefficients(compressibility_type, lmbda=lmbda, mu=mu)
     compare_dicts(expected_values, computed_values, tol=tol)
 
-    computed_values = compute_elasticity_coefficients(mu=mu, K=K)
+    computed_values = compute_elasticity_coefficients(compressibility_type, lmbda=lmbda, K=K)
+    compare_dicts(expected_values, computed_values, tol=tol)
+
+    computed_values = compute_elasticity_coefficients(compressibility_type, mu=mu, K=K)
     compare_dicts(expected_values, computed_values, tol=tol)
 
 

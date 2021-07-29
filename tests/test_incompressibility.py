@@ -594,7 +594,7 @@ def test_hyper_rectangle(elastic_law, top_displacement=-0.1, dim=3):
 
 def test_hyper_rectangle_iteration(elastic_law):
     import numpy as np
-    displacements = np.linspace(-0.4, 1.4, num=5)
+    displacements = np.linspace(-0.4, 1.4, num=2)
     stresses = []
     for displacement in displacements:
         stresses.append(test_hyper_rectangle(elastic_law, top_displacement=displacement))
@@ -664,9 +664,10 @@ def iterative_test_tire():
 if __name__ == "__main__":
     test_tensile_test()
     test_hyper_rectangle(NeoHookeIncompressible())
+    test_hyper_rectangle_iteration(MooneyRivlinIncompressible(7./8., -1./8.))
     test_J_convergence()
     test_half_ballon(dim=2)
     test_scaling_half_ballon(dim=2)
     test_tire("tire2D", dim=2)
     iterative_test_tire()
-    #test_hyper_rectangle_iteration(MooneyRivlinIncompressible(7./8., -1./8.))
+    
