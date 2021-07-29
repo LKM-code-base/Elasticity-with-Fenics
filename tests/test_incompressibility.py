@@ -117,7 +117,7 @@ class HyperRectangleTest(ElasticProblem):
             # boundary conditions
             gamma01 = PointSubDomain((0.0, 0.0, 0.0), tol=1e-10)
             gamma02 = dlfn.CompiledSubDomain("near(x[2], 0.0)")
-            gamma03 = PointSubDomain((0.0, 0.1, 0.0), tol=1e-10)
+            gamma03 = PointSubDomain((0.0, 0.05, 0.0), tol=1e-10)
 
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
                          (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
@@ -360,9 +360,10 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
 
         # pass dimensionless numbers
         if hasattr(self, "_D"):
-            self._elastic_solver.set_dimensionless_numbers(self._C, self._D)
+            self._get_solver().set_dimensionless_numbers(self._C, self._B, self._D,)
         else:
-            self._elastic_solver.set_dimensionless_numbers(self._C)
+            self._get_solver().set_dimensionless_numbers(self._C, self._B)
+
 
         # pass body force
         if hasattr(self, "_body_force"):
@@ -539,7 +540,7 @@ class IterativeTireTest(ElasticProblem):
 
 
 def test_tensile_test():
-    for elastic_law in [NeoHookeIncompressible(), MooneyRivlinIncompressible()]:
+    for elastic_law in [NeoHookeIncompressible(), MooneyRivlinIncompressible(7./8., -1./8.)]:
         for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
             tensile_test = TensileTest(25, elastic_law, bc_type=bc_type)
             print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
@@ -547,12 +548,59 @@ def test_tensile_test():
             print()
 
 
-def test_hyper_rectangle(top_displacement=0.1, dim=3):
-    hyper_rectangle_test = HyperRectangleTest(25, NeoHookeIncompressible())
+def test_hyper_rectangle(elastic_law, top_displacement=-0.1, dim=3):
+    hyper_rectangle_test = HyperRectangleTest(25, elastic_law, top_displacement=top_displacement, dim=dim)
     print(f"Elastic law: {hyper_rectangle_test._elastic_law.name}")
     print(f"Running {hyper_rectangle_test._problem_name} with top displacemt {hyper_rectangle_test._top_displacement}.")
     hyper_rectangle_test.solve_problem()
     print()
+
+    stress_tensor = hyper_rectangle_test._compute_stress_tensor()
+    # compute volume average of the stress tensor
+    dV = dlfn.Measure("dx", domain=hyper_rectangle_test._mesh)
+    V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+    solver = hyper_rectangle_test._get_solver()
+    u, p = solver.solution.split(True)
+
+    from ufl import inv, cofac
+    from dolfin import grad, inner
+    
+    I = dlfn.Identity(hyper_rectangle_test._space_dim)
+    # deformation gradient
+    F = I + hyper_rectangle_test._B * grad(u)
+    # volume ratio
+    J = dlfn.det(F)
+    # right Cauchy-Green tensor
+    C = F.T * F
+    # right Cauchy-Green tensor for isochoric deformation
+    # C_iso = J ** (- 2 / 3) * C
+
+    # 2. Piola-Kirchhoff stress
+
+    S_vol = J * p * inv(C)
+    S_iso = J ** (- 2 / hyper_rectangle_test._space_dim) * I - 1 / hyper_rectangle_test._space_dim * J ** (- 2 / hyper_rectangle_test._space_dim) * dlfn.tr(C) * inv(C)
+    S = S_vol + S_iso
+
+    sigma = hyper_rectangle_test._compute_stress_tensor()#(F * S * F.T) / J
+
+    P = J * sigma * inv(F.T)
+    print("Volume-averaged stresses: ")
+    for i in range(hyper_rectangle_test.space_dim):
+        for j in range(hyper_rectangle_test.space_dim):
+            avg_stress = dlfn.assemble(P[i, j] * dV) / V
+            print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+    print()
+    return (dlfn.assemble(P[hyper_rectangle_test._space_dim - 1, hyper_rectangle_test._space_dim - 1] * dV) / V)
+
+def test_hyper_rectangle_iteration(elastic_law):
+    import numpy as np
+    displacements = np.linspace(-0.4, 1.4, num=5)
+    stresses = []
+    for displacement in displacements:
+        stresses.append(test_hyper_rectangle(elastic_law, top_displacement=displacement))
+    
+    for i in range(len(displacements)):
+        print(f"{displacements[i]+1.0} {stresses[i]}")
 
 
 def test_J_convergence():
@@ -608,21 +656,17 @@ def iterative_test_tire():
         displacement = u((0.0, 0.79))
         displacements.append(sqrt(displacement[0]**2 + displacement[1]**2))
         print()
-    transformed_displacements = 0.2 * np.array(displacements)
+    transformed_displacements = 0.2 * 1000.0 * np.array(displacements)
 
     for i, p in enumerate(linRange):
         print(f"{p} {transformed_displacements[i]}")
-    import matplotlib.pyplot as plt
-    plt.plot(linRange, transformed_displacements)
-    plt.show()
-
 
 if __name__ == "__main__":
-    # test_tensile_test()
-    # test_hyper_rectangle()
-    # test_J_convergence()
-    # test_half_ballon(dim=2)
-    # test_scaling_half_ballon(dim=2)
-    # test_tire("tire2D", dim=2)
-    #test_tire("tire2D", n_refinments=0, dim=2)
+    test_tensile_test()
+    test_hyper_rectangle(NeoHookeIncompressible())
+    test_J_convergence()
+    test_half_ballon(dim=2)
+    test_scaling_half_ballon(dim=2)
+    test_tire("tire2D", dim=2)
     iterative_test_tire()
+    #test_hyper_rectangle_iteration(MooneyRivlinIncompressible(7./8., -1./8.))

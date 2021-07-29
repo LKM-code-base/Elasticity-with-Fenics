@@ -494,9 +494,9 @@ def test_dirichlet():
 
 
 if __name__ == "__main__":
-    # test_tensile_test()
-    # test_shear_test()
-    # test_body_force()
-    # test_bc_function()
-    # test_cylinder()
+    test_tensile_test()
+    test_shear_test()
+    test_body_force()
+    test_bc_function()
+    test_cylinder()
     test_dirichlet()
