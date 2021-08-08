@@ -265,7 +265,7 @@ class ElasticProblem(ProblemBase):
             displacement, p = solver.solution.split(True)
 
         # compute volume ratio
-        J = dlfn.det(dlfn.Identity(self._space_dim) + dlfn.grad(displacement))
+        J = dlfn.det(dlfn.Identity(self._space_dim) + self._B * dlfn.grad(displacement))
 
         # create function space
         family = displacement.ufl_function_space().ufl_element().family()
