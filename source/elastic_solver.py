@@ -394,7 +394,8 @@ class ElasticitySolver(SolverBase):
             self._n_dofs = self._Wh.dim()
             # print info
             assert hasattr(self, "_n_cells")
-            dlfn.info("Number of cells {0}, number of DoFs: {1} (consisting of {2} solid DoFs and {3} pressure DoFs)".format(self._n_cells, self._n_dofs, self._Vh.dim(), self._Ph.dim()))
+            dlfn.info("Number of cells {0}, number of DoFs: {1} ".format(self._n_cells, self._n_dofs) +
+                      "(consisting of {0} solid DoFs and {1} pressure DoFs)".format(self._Vh.dim(), self._Ph.dim()))
 
     def set_dimensionless_numbers(self, C, B, D=None):
         """

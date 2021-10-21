@@ -333,10 +333,11 @@ class DirichletTest(ElasticProblem):
                 )
             elif np.size(u) == self._space_dim**2:  # u is a tensor of second order
                 gu = tuple(
-                    tuple(
                         tuple(
-                            sp.diff(u[i, j], coord) for coord in self._coords) for j in range(len(u[0, :]))) for i in range(len(u[0, :]))
-                )
+                            tuple(sp.diff(u[i, j], coord) for coord in self._coords)
+                            for j in range(len(u[0, :])))
+                        for i in range(len(u[0, :]))
+                        )
             return np.array(gu)
 
         # compute body_force as a sympy expression:
@@ -354,10 +355,11 @@ class DirichletTest(ElasticProblem):
             H = grad_sympy(u)
             body_force_sympy = - np.tensordot(
                 EYE + grad_sympy(u),
-                self._C * (grad_sympy(div_sympy(u)) + 1 / 2 * grad_sympy(np.trace(np.tensordot(H, H.T, axes=1))))
+                self._C * (grad_sympy(div_sympy(u)) + 1.0 / 2.0 * grad_sympy(np.trace(np.tensordot(H, H.T, axes=1))))
                 + (div_sympy(H) + div_sympy(H.T) + div_sympy(np.tensordot(H.T, H, axes=1))), axes=1)\
                 - np.tensordot(grad_sympy(H), self._C
-                               * (div_sympy(u) + 1 / 2 * np.tensordot(H, H)) * EYE + (H + H.T + np.tensordot(H.T, H, axes=1)), axes=2)
+                               * (div_sympy(u) + 1.0 / 2.0 * np.tensordot(H, H)) * EYE
+                               + (H + H.T + np.tensordot(H.T, H, axes=1)), axes=2)
 
             self._body_force = dlfn.Expression(
                 tuple(sp.printing.ccode(body_force_sympy[i]) for i in range(len(body_force_sympy))),

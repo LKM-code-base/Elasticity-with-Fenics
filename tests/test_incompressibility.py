@@ -111,7 +111,8 @@ class HyperRectangleTest(ElasticProblem):
 
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
                          (DisplacementBCType.fixed_component_pointwise, gamma02, 1, None),
-                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.top.value, 1, self._top_displacement)]
+                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.top.value,
+                          1, self._top_displacement)]
 
         if self._space_dim == 3:
             # boundary conditions
@@ -122,7 +123,8 @@ class HyperRectangleTest(ElasticProblem):
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
                          (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
                          (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
-                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.front.value, 2, self._top_displacement)]
+                         (DisplacementBCType.constant_component,
+                          HyperCubeBoundaryMarkers.front.value, 2, self._top_displacement)]
 
     def postprocess_solution(self):
         # compute stresses
@@ -169,14 +171,18 @@ class BalloonTest(ElasticProblem):
         if self._space_dim == 2:
             gamma01 = PointSubDomain((0.0, -1.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
-                         (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
-                         (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
 
         if self._space_dim == 3:
             gamma01 = PointSubDomain((0.0, 0.0, -1.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
-                         (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
-                         (TractionBCType.constant_pressure, SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
 
     def postprocess_solution(self):
         # compute stresses
@@ -224,16 +230,20 @@ class HalfBalloonTest(ElasticProblem):
         if self._space_dim == 2:
             gamma01 = PointSubDomain((0.0, 1.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 0, None),
-                         (DisplacementBCType.fixed_component, SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 1, None),
-                         (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.1)]
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 1, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.1)]
 
         if self._space_dim == 3:
             gamma01 = PointSubDomain((1.0, 0.0, 0.0), tol=1e-10)
             gamma03 = PointSubDomain((0.0, 1.0, 0.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 1, None),
                          (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
-                         (DisplacementBCType.fixed_component, SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
-                         (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.1)]
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.1)]
 
     def postprocess_solution(self):
         # compute stresses
@@ -281,17 +291,24 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
         if self._space_dim == 2:
             gamma01 = PointSubDomain((0.0, 1.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 0, None),
-                         (DisplacementBCType.fixed_component, SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 1, None),
-                         (TractionBCType.constant_pressure, SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value, 0.0),
-                         (TractionBCType.function_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, dlfn.Expression("-scaling_factor * .6", scaling_factor=1.1, degree=0))]
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 1, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value, 0.0),
+                         (TractionBCType.function_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value,
+                          dlfn.Expression("-scaling_factor * .6", scaling_factor=1.1, degree=0))]
 
         if self._space_dim == 3:
             gamma01 = PointSubDomain((1.0, 0.0, 0.0), tol=1e-10)
             gamma03 = PointSubDomain((0.0, 1.0, 0.0), tol=1e-10)
             self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 1, None),
                          (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
-                         (DisplacementBCType.fixed_component, SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
-                         (TractionBCType.function_pressure, SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, dlfn.Expression(("-scaling_factor * 0.1"), scaling_factor=0.0, degree=0))]
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
+                         (TractionBCType.function_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value,
+                          dlfn.Expression(("-scaling_factor * 0.1"), scaling_factor=0.0, degree=0))]
 
     def postprocess_solution(self):
         # compute stresses
@@ -322,8 +339,10 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
         solver = self._get_solver()
         displacement, pressure = solver.solution.split(True)
         print("Volume-averaged Lagrange Multiplier: ")
-        avg_pressure_inner = dlfn.assemble(pressure * dA(SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value)) / A_inner
-        avg_pressure_outer = dlfn.assemble(pressure * dA(SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value)) / A_outer
+        avg_pressure_inner = dlfn.assemble(pressure *
+                                           dA(SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value)) / A_inner
+        avg_pressure_outer = dlfn.assemble(pressure *
+                                           dA(SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value)) / A_outer
         print("Avg. Lagrange Multiplier inner:")
         print(avg_pressure_inner)
         print("Avg. Lagrange Multiplier outer:")
@@ -353,7 +372,8 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
         # create solver object
         if not hasattr(self, "_elastic_solver"):
             self._elastic_solver = \
-                ElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law, polynomial_degree=self._polynomial_degree)
+                ElasticitySolver(self._mesh, self._boundary_markers,
+                                 self._elastic_law, polynomial_degree=self._polynomial_degree)
 
         # pass boundary conditions
         self._elastic_solver.set_boundary_conditions(self._bcs)
@@ -363,7 +383,6 @@ class IterativeScalingHalfBalloonTest(ElasticProblem):
             self._get_solver().set_dimensionless_numbers(self._C, self._B, self._D,)
         else:
             self._get_solver().set_dimensionless_numbers(self._C, self._B)
-
 
         # pass body force
         if hasattr(self, "_body_force"):
@@ -465,8 +484,8 @@ class TireTest(ElasticProblem):
         u, p = solver.solution.split(True)
 
         from ufl import inv, cofac
-        from dolfin import grad, inner
-        
+        from dolfin import grad
+
         I = dlfn.Identity(self._space_dim)
         # deformation gradient
         F = I + self._B * grad(u)
@@ -488,8 +507,10 @@ class TireTest(ElasticProblem):
 
         P = J * sigma * inv(F.T)
 
-        traction_value = dlfn.assemble(dlfn.dot(- 0.001 / 3.0 * self._normal_transform, dlfn.FacetNormal(self._mesh)) * dA(100))
-        piola_part = dlfn.assemble(dlfn.dot(P * dlfn.FacetNormal(self._mesh),dlfn.FacetNormal(self._mesh)) * dA(100))
+        traction_value = dlfn.assemble(dlfn.dot(- 0.001 / 3.0 * self._normal_transform,
+                                                dlfn.FacetNormal(self._mesh)) * dA(100))
+        piola_part = dlfn.assemble(dlfn.dot(P * dlfn.FacetNormal(self._mesh),
+                                            dlfn.FacetNormal(self._mesh)) * dA(100))
 
         print(f'traction value: {traction_value}')
         print(f'piola part: {piola_part}')
@@ -555,33 +576,23 @@ def test_hyper_rectangle(elastic_law, top_displacement=-0.1, dim=3):
     hyper_rectangle_test.solve_problem()
     print()
 
-    stress_tensor = hyper_rectangle_test._compute_stress_tensor()
     # compute volume average of the stress tensor
     dV = dlfn.Measure("dx", domain=hyper_rectangle_test._mesh)
     V = dlfn.assemble(dlfn.Constant(1.0) * dV)
     solver = hyper_rectangle_test._get_solver()
     u, p = solver.solution.split(True)
 
-    from ufl import inv, cofac
-    from dolfin import grad, inner
-    
+    from ufl import inv
+    from dolfin import grad
+
     I = dlfn.Identity(hyper_rectangle_test._space_dim)
     # deformation gradient
     F = I + hyper_rectangle_test._B * grad(u)
     # volume ratio
     J = dlfn.det(F)
     # right Cauchy-Green tensor
-    C = F.T * F
-    # right Cauchy-Green tensor for isochoric deformation
-    # C_iso = J ** (- 2 / 3) * C
 
-    # 2. Piola-Kirchhoff stress
-
-    S_vol = J * p * inv(C)
-    S_iso = J ** (- 2 / hyper_rectangle_test._space_dim) * I - 1 / hyper_rectangle_test._space_dim * J ** (- 2 / hyper_rectangle_test._space_dim) * dlfn.tr(C) * inv(C)
-    S = S_vol + S_iso
-
-    sigma = hyper_rectangle_test._compute_stress_tensor()#(F * S * F.T) / J
+    sigma = hyper_rectangle_test._compute_stress_tensor()
 
     P = J * sigma * inv(F.T)
     print("Volume-averaged stresses: ")
@@ -592,13 +603,14 @@ def test_hyper_rectangle(elastic_law, top_displacement=-0.1, dim=3):
     print()
     return (dlfn.assemble(P[hyper_rectangle_test._space_dim - 1, hyper_rectangle_test._space_dim - 1] * dV) / V)
 
+
 def test_hyper_rectangle_iteration(elastic_law):
     import numpy as np
     displacements = np.linspace(-0.4, 1.4, num=2)
     stresses = []
     for displacement in displacements:
         stresses.append(test_hyper_rectangle(elastic_law, top_displacement=displacement))
-    
+
     for i in range(len(displacements)):
         print(f"{displacements[i]+1.0} {stresses[i]}")
 
@@ -641,6 +653,7 @@ def test_tire(tire_type, n_refinments=0, dim=2):
     tire_test = TireTest(tire_type, n_refinments, NeoHookeIncompressible(), dim=dim)
     tire_test.solve_problem()
 
+
 def iterative_test_tire():
     import numpy as np
 
@@ -651,7 +664,7 @@ def iterative_test_tire():
         tire_test = IterativeTireTest("tire2D", 0, MooneyRivlinIncompressible(7./8., -1./8.), p * 0.001 / 9.0)
         tire_test.solve_problem()
         solver = tire_test._get_solver()
-        u,_ = solver.solution.split(True)
+        u, _ = solver.solution.split(True)
         from math import sqrt
         displacement = u((0.0, 0.79))
         displacements.append(sqrt(displacement[0]**2 + displacement[1]**2))
@@ -660,6 +673,7 @@ def iterative_test_tire():
 
     for i, p in enumerate(linRange):
         print(f"{p} {transformed_displacements[i]}")
+
 
 if __name__ == "__main__":
     test_tensile_test()
@@ -670,4 +684,3 @@ if __name__ == "__main__":
     test_scaling_half_ballon(dim=2)
     test_tire("tire2D", dim=2)
     iterative_test_tire()
-    

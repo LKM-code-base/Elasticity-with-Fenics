@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import os
 from os import path
-from math import isfinite, nan
+from math import isfinite
 import dolfin as dlfn
 from auxiliary_methods import compute_elasticity_coefficients
 from auxiliary_methods import ElasticModuli
@@ -29,7 +29,9 @@ class ProblemBase:
         assert hasattr(self._elastic_law, "linearity_type")
         assert hasattr(self._elastic_law, "name")
 
-        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law.compressiblity_type}/{self._elastic_law.name}")
+        self._results_dir = path.join(self._main_dir,
+                                      f"results/{self._elastic_law.linearity_type}/" +
+                                      f"{self._elastic_law.compressiblity_type}/{self._elastic_law.name}")
 
     def _add_to_field_output(self, field):
         """
@@ -493,7 +495,8 @@ class ElasticProblem(ProblemBase):
         assert hasattr(self, "_elastic_law")
         assert hasattr(self, "_polynomial_degree")
         self._elastic_solver = \
-                ElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law, polynomial_degree=self._polynomial_degree)
+            ElasticitySolver(self._mesh, self._boundary_markers,
+                             self._elastic_law, polynomial_degree=self._polynomial_degree)
 
     def solve_problem(self):
         """

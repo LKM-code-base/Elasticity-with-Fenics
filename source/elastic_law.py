@@ -340,7 +340,8 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * p * inv(C)
-        S_iso = J ** (- 2 / self._space_dim) * self._I - 1 / self._space_dim * J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
+        S_iso = J ** (- 2 / self._space_dim) * self._I - 1 / self._space_dim * \
+            J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
         S = S_vol + S_iso
 
         dE = dlfn.Constant(0.5) * (F.T * grad(v) + grad(v).T * F)
@@ -382,7 +383,8 @@ class NeoHookeIncompressible(IncompressibleElasticLaw):
 
         # 2. Piola-Kirchhoff stress
         S_vol = J * pressure * inv(C)
-        S_iso = J ** (- 2 / self._space_dim) * self._I - 1 / self._space_dim * J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
+        S_iso = J ** (- 2 / self._space_dim) * self._I - 1 / self._space_dim * \
+            J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
         S = S_vol + S_iso
 
         # dimensionless Cauchy stress tensor (symbolic)
@@ -507,9 +509,9 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
             self._c1 * (self._I - 1. / self._space_dim * dlfn.tr(C) * inv(C))
             - self._c2 * (dlfn.tr(C_iso) * self._I
                           + 1. / self._space_dim
-                          * (inner(C_iso, C) - dlfn.tr(C) * dlfn.tr(C_iso)) * inv(C) 
+                          * (inner(C_iso, C) - dlfn.tr(C) * dlfn.tr(C_iso)) * inv(C)
                           - C_iso
-                         )
+                          )
                 )
         S = S_vol + S_iso
 
@@ -558,9 +560,9 @@ class MooneyRivlinIncompressible(IncompressibleElasticLaw):
             self._c1 * (1. - dlfn.tr(C)) * inv(C)
             - self._c2 * (dlfn.tr(C_iso) * self._I
                           + 1. / self._space_dim
-                          * (inner(C_iso, C) - dlfn.tr(C) * dlfn.tr(C_iso)) * inv(C) 
+                          * (inner(C_iso, C) - dlfn.tr(C) * dlfn.tr(C_iso)) * inv(C)
                           - C_iso
-                         )
+                          )
         )
         S = S_vol + S_iso
 

@@ -47,11 +47,11 @@ def test_cylinder():
 
 def test_tire():
     # two-dimensional case
-    _, _ = tire(2,"tire2D", n_refinements=0)
+    _, _ = tire(2, "tire2D", n_refinements=0)
     # three-dimensional case
     for n_refinements in range(2):
-        _, _ = tire(3,"tire3Deight", n_refinements=n_refinements)
-    
+        _, _ = tire(3, "tire3Deight", n_refinements=n_refinements)
+
     _, _ = tire(3, "tire3Dquarter")
 
 

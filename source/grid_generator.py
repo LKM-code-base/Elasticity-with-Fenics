@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from enum import Enum, auto
-
-import math
-
-from os import getcwd
-
 import dolfin as dlfn
-from mshr import Sphere, Circle, Cylinder, Polygon, Box, Rectangle, generate_mesh
+from enum import Enum, auto
+import math
+from mshr import Sphere, Circle, Cylinder, Polygon, generate_mesh
+from os import getcwd
 
 
 class GeometryType(Enum):
@@ -32,6 +29,7 @@ class SphericalHalfAnnulusBoundaryMarkers(Enum):
     interior_boundary = auto()
     exterior_boundary = auto()
     bottom_boundary = auto()
+
 
 class HyperCubeBoundaryMarkers(Enum):
     """
@@ -173,7 +171,7 @@ def half_spherical_shell(dim, radii, n_refinements=0):
     if dim == 2:
         mesh = dlfn.Mesh()
         with dlfn.XDMFFile(f"{getcwd()}/meshes/ballon/ballon2D/arc.xdmf") as infile:
-            infile.read(mesh)   
+            infile.read(mesh)
     elif dim == 3:
         mesh = dlfn.Mesh()
         with dlfn.XDMFFile(f"{getcwd()}/meshes/ballon/ballon3D/hemisphere.xdmf") as infile:
@@ -219,32 +217,37 @@ def tire(dim, type, n_refinements=0):
     elif n_refinements == 1:
         assert type == "tire3Deight"
         refinement_type = ""
-    
+
     if dim == 2:
         assert type == "tire2D"
         mesh = dlfn.Mesh()
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/{type}{refinement_type}_refin/{type}.xdmf") as infile:
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/" +
+                           f"{type}{refinement_type}_refin/{type}.xdmf") as infile:
             infile.read(mesh)
     if dim == 3:
         assert type == "tire3Deight" or type == "tire3Dquarter"
         mesh = dlfn.Mesh()
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}/{type}{refinement_type}_refin/{type}.xdmf") as infile:
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}/" +
+                           f"{type}{refinement_type}_refin/{type}.xdmf") as infile:
             infile.read(mesh)
     assert dim == mesh.topology().dim()
 
     if dim == 2:
-        mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() -1)
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
+        mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() - 1)
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/" +
+                           f"{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
             infile.read(mvc, "facet_markers")
         facet_marker = dlfn.cpp.mesh.MeshFunctionSizet(mesh, mvc)
-    
+
     if dim == 3:
-        mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() -1)
-        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}/{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
+        mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() - 1)
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}" +
+                           f"/{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
             infile.read(mvc, "facet_markers")
         facet_marker = dlfn.cpp.mesh.MeshFunctionSizet(mesh, mvc)
 
     return mesh, facet_marker
+
 
 def hyper_cube(dim, n_points=10):
     assert isinstance(dim, int)
