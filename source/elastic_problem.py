@@ -6,7 +6,7 @@ from math import isfinite
 import dolfin as dlfn
 from auxiliary_methods import compute_elasticity_coefficients
 from auxiliary_methods import ElasticModuli
-from elastic_solver import CompressibleElasticitySolver
+from elastic_solver import ElasticitySolver
 from elastic_law import ElasticLaw
 
 
@@ -14,7 +14,6 @@ class ProblemBase:
     _suffix = ".xdmf"
 
     def __init__(self, elastic_law, main_dir=None):
-
         # set elastic law
         assert isinstance(elastic_law, ElasticLaw)
         self._elastic_law = elastic_law
@@ -27,10 +26,12 @@ class ProblemBase:
             assert path.exist(main_dir)
             self._main_dir = main_dir
 
-        assert hasattr(elastic_law, "linearity_type")
-        assert hasattr(elastic_law, "name")
+        assert hasattr(self._elastic_law, "linearity_type")
+        assert hasattr(self._elastic_law, "name")
 
-        self._results_dir = path.join(self._main_dir, f"results/{self._elastic_law.linearity_type}/{self._elastic_law.name}")
+        self._results_dir = path.join(self._main_dir,
+                                      f"results/{self._elastic_law.linearity_type}/" +
+                                      f"{self._elastic_law.compressiblity_type}/{self._elastic_law.name}")
 
     def _add_to_field_output(self, field):
         """
@@ -39,7 +40,10 @@ class ProblemBase:
         """
         if not hasattr(self, "_additional_field_output"):
             self._additional_field_output = []
-        self._additional_field_output.append(field)
+        if isinstance(field, (tuple, list)):
+            self._additional_field_output = [*self._additional_field_output, *field]
+        else:
+            self._additional_field_output.append(field)
 
     def _compute_stress_tensor(self):  # pragma: no cover
         """
@@ -56,6 +60,12 @@ class ProblemBase:
     def _compute_strain_tensor(self):  # pragma: no cover
         """
         Returns the strain tensor.
+        """
+        raise NotImplementedError("You are calling a purely virtual method.")
+
+    def _compute_equiv_stresses(self):
+        """
+        Returns the equivalent stresses.
         """
         raise NotImplementedError("You are calling a purely virtual method.")
 
@@ -168,10 +178,10 @@ class ProblemBase:
         return self._space_dim
 
 
-class CompressibleElasticProblem(ProblemBase):
+class ElasticProblem(ProblemBase):
     """
-    Class to simulate a compressible elastic problem using the
-    `CompressibleElasticitySolver`.
+    Class to simulate a compressible or incompressible elastic problem using the
+    `ElasticitySolver`.
 
     Parameters
     ----------
@@ -185,7 +195,7 @@ class CompressibleElasticProblem(ProblemBase):
         Maximum number of iterations in total.
     """
 
-    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50):
+    def __init__(self, elastic_law, main_dir=None, tol=1e-10, maxiter=50, polynomial_degree=1):
         """
         Constructor of the class.
         """
@@ -194,10 +204,13 @@ class CompressibleElasticProblem(ProblemBase):
         # input check
         assert isinstance(maxiter, int) and maxiter > 0
         assert isinstance(tol, float) and tol > 0.0
+        assert isinstance(polynomial_degree, int) and polynomial_degree >= 0
 
         # set numerical tolerances
         self._tol = tol
         self._maxiter = maxiter
+        # set polynomial degree
+        self._polynomial_degree = polynomial_degree
 
     def _compute_stress_tensor(self):
         """
@@ -206,28 +219,153 @@ class CompressibleElasticProblem(ProblemBase):
         assert hasattr(self, "_C")
         solver = self._get_solver()
 
-        # displacement vector
-        displacement = solver.solution
+        assert hasattr(self, "_elastic_law")
+        if self._elastic_law.compressiblity_type == "Compressible":
+            # displacement vector
+            displacement = solver.solution
 
-        # compute cauchy stress
-        stress = self._elastic_law.postprocess_cauchy_stress(displacement)
+            # compute cauchy stress
+            stress = self._elastic_law.cauchy_stress(displacement)
+        elif self._elastic_law.compressiblity_type == "Incompressible":
+            # displacement vector and Langrange multiplier p
+            displacement, p = solver.solution.split(True)
+            # compute cauchy stress
+            stress = self._elastic_law.cauchy_stress(displacement, p)
 
         # create function space
-        family = displacement.ufl_element().family()
+        family = displacement.ufl_function_space().ufl_element().family()
         assert family == "Lagrange"
-        degree = displacement.ufl_element().degree()
+        degree = displacement.ufl_function_space().ufl_element().degree()
         assert degree >= 0
         cell = self._mesh.ufl_cell()
         elemSigma = dlfn.TensorElement("DG", cell, degree - 1,
                                        shape=(self._space_dim, self._space_dim),
                                        symmetry=True)
-        Wh = dlfn.FunctionSpace(self._mesh, elemSigma)
+        Sh = dlfn.FunctionSpace(self._mesh, elemSigma)
 
         # project
-        sigma = dlfn.project(stress, Wh)
+        sigma = dlfn.project(stress, Sh)
         sigma.rename("sigma", "")
 
         return sigma
+
+    def _compute_volume_ratio(self):
+        """
+        Returns the volume ratio J.
+        """
+        assert hasattr(self, "_C")
+        solver = self._get_solver()
+
+        assert hasattr(self, "_elastic_law")
+
+        if self._elastic_law.compressiblity_type == "Compressible":
+            # displacement vector
+            displacement = solver.solution
+
+        elif self._elastic_law.compressiblity_type == "Incompressible":
+            # displacement vector and Lagrange multiplier
+            displacement, p = solver.solution.split(True)
+
+        # compute volume ratio
+        J = dlfn.det(dlfn.Identity(self._space_dim) + self._B * dlfn.grad(displacement))
+
+        # create function space
+        family = displacement.ufl_function_space().ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_function_space().ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemJ = dlfn.FiniteElement("DG", cell, degree - 1)
+
+        Sh = dlfn.FunctionSpace(self._mesh, elemJ)
+
+        # project
+        J = dlfn.project(J, Sh)
+        J.rename("J", "")
+
+        return J
+
+    def _compute_pressure(self):
+        """
+        Returns the pressure.
+        """
+        assert hasattr(self, "_elastic_law")
+
+        sigma = self._compute_stress_tensor()
+        pressure = 1. / self._space_dim * dlfn.tr(sigma)
+
+        solver = self._get_solver()
+        if self._elastic_law.compressiblity_type == "Compressible":
+            # displacement vector
+            displacement = solver.solution
+
+        elif self._elastic_law.compressiblity_type == "Incompressible":
+            # displacement vector and Lagrange multiplier p
+            displacement, p = solver.solution.split(True)
+
+        # create function space
+        family = displacement.ufl_function_space().ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_function_space().ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemP = dlfn.FiniteElement("DG", cell, degree - 1)
+
+        Ph = dlfn.FunctionSpace(self._mesh, elemP)
+
+        # project
+        pressure = dlfn.project(pressure, Ph)
+        pressure.rename("pressure", "")
+
+        return pressure
+
+    def _compute_equiv_stresses(self):
+        """
+        Returns the equivalent stresses.
+        """
+        assert hasattr(self, "_elastic_law")
+
+        solver = self._get_solver()
+        if self._elastic_law.compressiblity_type == "Compressible":
+            # displacement vector
+            displacement = solver.solution
+            sigma = self._elastic_law.cauchy_stress(displacement)
+
+        elif self._elastic_law.compressiblity_type == "Incompressible":
+            # displacement vector and Lagrange multiplier p
+            displacement, p = solver.solution.split(True)
+            sigma = self._elastic_law.cauchy_stress(displacement, p)
+
+        Identity = dlfn.Identity(self._space_dim)
+
+        sigma_sph = 1. / self._space_dim * dlfn.tr(sigma) * Identity
+        sigma_dev = sigma - sigma_sph
+
+        sigma_euc = (dlfn.inner(sigma, sigma))
+        sigma_sph_euc = dlfn.sqrt(dlfn.inner(sigma_sph, sigma_sph))
+        sigma_dev_euc = dlfn.sqrt(dlfn.inner(sigma_dev, sigma_dev))
+
+        # create function space
+        family = displacement.ufl_function_space().ufl_element().family()
+        assert family == "Lagrange"
+        degree = displacement.ufl_function_space().ufl_element().degree()
+        assert degree >= 0
+        cell = self._mesh.ufl_cell()
+        elemP = dlfn.FiniteElement("DG", cell, degree - 1)
+
+        Ph = dlfn.FunctionSpace(self._mesh, elemP)
+
+        # project
+        sigma_euc = dlfn.project(sigma_euc, Ph)
+        sigma_euc.rename("sigma_euc", "")
+
+        sigma_sph_euc = dlfn.project(sigma_sph_euc, Ph)
+        sigma_sph_euc.rename("sigma_sph_euc", "")
+
+        sigma_dev_euc = dlfn.project(sigma_dev_euc, Ph)
+        sigma_dev_euc.rename("sigma_dev_euc", "")
+
+        return sigma_euc, sigma_sph_euc, sigma_dev_euc
 
     def _get_filename(self):
         """
@@ -261,6 +399,13 @@ class CompressibleElasticProblem(ProblemBase):
                 assert isfinite(D)
                 assert D > 0.0
                 self._D = D
+            # 34d dimensionless coefficient
+            if "B" in kwargs.keys():
+                B = kwargs["B"]
+                assert isinstance(B, float)
+                assert isfinite(B)
+                assert B > 0.0
+                self._B = B
 
         else:
             # extract elastic moduli
@@ -269,11 +414,17 @@ class CompressibleElasticProblem(ProblemBase):
                 cleaned_kwargs.pop("lref")
             if "bref" in cleaned_kwargs.keys():
                 cleaned_kwargs.pop("bref")
-            elastic_moduli = compute_elasticity_coefficients(**cleaned_kwargs)
-            lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
+            if "uref" in cleaned_kwargs.keys():
+                cleaned_kwargs.pop("uref")
+            elastic_moduli = compute_elasticity_coefficients(self._elastic_law.compressiblity_type, **cleaned_kwargs)
+            if self._elastic_law.compressiblity_type == "Compressible":
+                lmbda = elastic_moduli[ElasticModuli.FirstLameParameter]
             mu = elastic_moduli[ElasticModuli.ShearModulus]
             # 1st dimensionless coefficient
-            self._C = lmbda / mu
+            if self._elastic_law.compressiblity_type == "Compressible":
+                self._C = lmbda / mu
+            elif self._elastic_law.compressiblity_type == "Incompressible":
+                self._C = 1.0  # This is a dummy variable
 
             # 2nd optional dimensionless coefficient
             if "lref" in kwargs.keys() and "bref" in kwargs.keys():
@@ -292,6 +443,26 @@ class CompressibleElasticProblem(ProblemBase):
 
             else:
                 self._D = None
+
+            # 3rd optional dimensionless coefficient
+            if "uref" in kwargs.keys() and "lref" in kwargs.keys():
+                # reference length
+                lref = kwargs["lref"]
+                assert isinstance(lref, float)
+                assert isfinite(lref)
+                assert lref > 0.0
+
+                # reference displacement
+                uref = kwargs["uref"]
+                assert isinstance(uref, float)
+                assert isfinite(uref)
+                assert uref > 0.0
+
+                # 3rd optional dimensionless coefficient
+                self._B = uref / lref
+
+            else:
+                self._B = 1.0
 
     def write_boundary_markers(self):
         """
@@ -318,6 +489,15 @@ class CompressibleElasticProblem(ProblemBase):
         assert hasattr(self, "_elastic_solver")
         return self._elastic_solver
 
+    def set_solver(self):
+        assert hasattr(self, "_mesh")
+        assert hasattr(self, "_boundary_markers")
+        assert hasattr(self, "_elastic_law")
+        assert hasattr(self, "_polynomial_degree")
+        self._elastic_solver = \
+            ElasticitySolver(self._mesh, self._boundary_markers,
+                             self._elastic_law, polynomial_degree=self._polynomial_degree)
+
     def solve_problem(self):
         """
         Solve the stationary problem.
@@ -340,21 +520,20 @@ class CompressibleElasticProblem(ProblemBase):
 
         # create solver object
         if not hasattr(self, "_elastic_solver"):
-            self._elastic_solver = \
-                CompressibleElasticitySolver(self._mesh, self._boundary_markers, self._elastic_law)
+            self.set_solver()
 
         # pass boundary conditions
-        self._elastic_solver.set_boundary_conditions(self._bcs)
+        self._get_solver().set_boundary_conditions(self._bcs)
 
         # pass dimensionless numbers
         if hasattr(self, "_D"):
-            self._elastic_solver.set_dimensionless_numbers(self._C, self._D)
+            self._get_solver().set_dimensionless_numbers(self._C, self._B, self._D,)
         else:
-            self._elastic_solver.set_dimensionless_numbers(self._C)
+            self._get_solver().set_dimensionless_numbers(self._C, self._B)
 
         # pass body force
         if hasattr(self, "_body_force"):
-            self._elastic_solver.set_body_force(self._body_force)
+            self._get_solver().set_body_force(self._body_force)
 
         # solve problem
         if self._D is not None:
@@ -362,7 +541,7 @@ class CompressibleElasticProblem(ProblemBase):
                       "D = {1:0.2f}".format(self._C, self._D))
         else:
             dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
-        self._elastic_solver.solve()
+        self._get_solver().solve()
 
         # postprocess solution
         self.postprocess_solution()

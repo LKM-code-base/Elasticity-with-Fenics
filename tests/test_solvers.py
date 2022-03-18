@@ -3,7 +3,7 @@
 from auxiliary_classes import PointSubDomain
 from grid_generator import hyper_cube, cylinder
 from grid_generator import HyperCubeBoundaryMarkers, CylinderBoundaryMarkers
-from elastic_problem import CompressibleElasticProblem
+from elastic_problem import ElasticProblem
 from elastic_solver import DisplacementBCType
 from elastic_solver import TractionBCType
 from elastic_law import Hooke, StVenantKirchhoff, NeoHooke
@@ -12,7 +12,7 @@ import numpy as np
 import sympy as sp
 
 
-class TensileTest(CompressibleElasticProblem):
+class TensileTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating"):
         super().__init__(elastic_law, main_dir)
 
@@ -81,7 +81,7 @@ class TensileTest(CompressibleElasticProblem):
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
-class ShearTest(CompressibleElasticProblem):
+class ShearTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None, bc_type="displacement"):
         super().__init__(elastic_law, main_dir)
 
@@ -137,7 +137,7 @@ class ShearTest(CompressibleElasticProblem):
                 print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
 
 
-class BodyForceTest(CompressibleElasticProblem):
+class BodyForceTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
@@ -175,7 +175,7 @@ class BodyForceTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
-class BCFunctionTest(CompressibleElasticProblem):
+class BCFunctionTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
@@ -209,7 +209,7 @@ class BCFunctionTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
-class CylinderTest(CompressibleElasticProblem):
+class CylinderTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, top_displacement=0.1, dim=3, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
@@ -265,14 +265,14 @@ class CylinderTest(CompressibleElasticProblem):
             self._add_to_field_output(stress)
 
 
-class DirichletTest(CompressibleElasticProblem):
+class DirichletTest(ElasticProblem):
     def __init__(self, n_points, elastic_law, main_dir=None):
         super().__init__(elastic_law, main_dir)
 
         self._n_points = n_points
         self._problem_name = "DirichletTest"
 
-        self.set_parameters(C=1.5, D=1.)
+        self.set_parameters(C=1.5, D=1., B=1.)
 
     def setup_mesh(self):
         # create mesh
@@ -333,10 +333,11 @@ class DirichletTest(CompressibleElasticProblem):
                 )
             elif np.size(u) == self._space_dim**2:  # u is a tensor of second order
                 gu = tuple(
-                    tuple(
                         tuple(
-                            sp.diff(u[i, j], coord) for coord in self._coords) for j in range(len(u[0, :]))) for i in range(len(u[0, :]))
-                )
+                            tuple(sp.diff(u[i, j], coord) for coord in self._coords)
+                            for j in range(len(u[0, :])))
+                        for i in range(len(u[0, :]))
+                        )
             return np.array(gu)
 
         # compute body_force as a sympy expression:
@@ -354,10 +355,11 @@ class DirichletTest(CompressibleElasticProblem):
             H = grad_sympy(u)
             body_force_sympy = - np.tensordot(
                 EYE + grad_sympy(u),
-                self._C * (grad_sympy(div_sympy(u)) + 1 / 2 * grad_sympy(np.trace(np.tensordot(H, H.T, axes=1))))
+                self._C * (grad_sympy(div_sympy(u)) + 1.0 / 2.0 * grad_sympy(np.trace(np.tensordot(H, H.T, axes=1))))
                 + (div_sympy(H) + div_sympy(H.T) + div_sympy(np.tensordot(H.T, H, axes=1))), axes=1)\
                 - np.tensordot(grad_sympy(H), self._C
-                               * (div_sympy(u) + 1 / 2 * np.tensordot(H, H)) * EYE + (H + H.T + np.tensordot(H.T, H, axes=1)), axes=2)
+                               * (div_sympy(u) + 1.0 / 2.0 * np.tensordot(H, H)) * EYE
+                               + (H + H.T + np.tensordot(H.T, H, axes=1)), axes=2)
 
             self._body_force = dlfn.Expression(
                 tuple(sp.printing.ccode(body_force_sympy[i]) for i in range(len(body_force_sympy))),

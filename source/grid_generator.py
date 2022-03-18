@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from enum import Enum, auto
-
-import math
-
 import dolfin as dlfn
+from enum import Enum, auto
+import math
 from mshr import Sphere, Circle, Cylinder, Polygon, generate_mesh
+from os import getcwd
 
 
 class GeometryType(Enum):
@@ -21,6 +20,15 @@ class SphericalAnnulusBoundaryMarkers(Enum):
     """
     interior_boundary = auto()
     exterior_boundary = auto()
+
+
+class SphericalHalfAnnulusBoundaryMarkers(Enum):
+    """
+    Simple enumeration to identify the boundaries of a spherical annulus uniquely.
+    """
+    interior_boundary = auto()
+    exterior_boundary = auto()
+    bottom_boundary = auto()
 
 
 class HyperCubeBoundaryMarkers(Enum):
@@ -66,12 +74,16 @@ class CircularBoundary(dlfn.SubDomain):
         assert(isinstance(kwargs["mesh"], dlfn.Mesh))
         assert(isinstance(kwargs["radius"], float) and kwargs["radius"] > 0.0)
         self._hmin = kwargs["mesh"].hmin()
+        self._space_dim = kwargs["mesh"].geometry().dim()
         self._radius = kwargs["radius"]
 
     def inside(self, x, on_boundary):
         # tolerance: half length of smallest element
         tol = self._hmin / 2.
-        result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius) < tol
+        if self._space_dim == 2:
+            result = abs(math.sqrt(x[0]**2 + x[1]**2) - self._radius) < tol
+        elif self._space_dim == 3:
+            result = abs(math.sqrt(x[0]**2 + x[1]**2 + x[2]**2) - self._radius) < tol
         return result and on_boundary
 
 
@@ -115,7 +127,7 @@ def spherical_shell(dim, radii, n_refinements=0):
         center = dlfn.Point(0., 0., 0.)
 
     if dim == 2:
-        domain = Circle(center, ro)\
+        domain = Circle(center, ro) \
             - Circle(center, ri)
         mesh = generate_mesh(domain, 75)
     elif dim == 3:
@@ -137,6 +149,102 @@ def spherical_shell(dim, radii, n_refinements=0):
     gamma_inner.mark(facet_marker, BoundaryMarkers.interior_boundary.value)
     gamma_outer = CircularBoundary(mesh=mesh, radius=ro)
     gamma_outer.mark(facet_marker, BoundaryMarkers.exterior_boundary.value)
+
+    return mesh, facet_marker
+
+
+def half_spherical_shell(dim, radii, n_refinements=0):
+    """
+    Creates the mesh of a spherical shell using the mshr module.
+    """
+    assert isinstance(dim, int)
+    assert dim == 2 or dim == 3
+
+    assert isinstance(radii, (list, tuple)) and len(radii) == 2
+    ri, ro = radii
+    assert isinstance(ri, float) and ri > 0.
+    assert isinstance(ro, float) and ro > 0.
+    assert ri < ro
+
+    assert isinstance(n_refinements, int) and n_refinements >= 0
+
+    if dim == 2:
+        mesh = dlfn.Mesh()
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/ballon/ballon2D/arc.xdmf") as infile:
+            infile.read(mesh)
+    elif dim == 3:
+        mesh = dlfn.Mesh()
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/ballon/ballon3D/hemisphere.xdmf") as infile:
+            infile.read(mesh)
+    assert dim == mesh.topology().dim()
+
+    # mesh refinement
+    for i in range(n_refinements):
+        mesh = dlfn.refine(mesh)
+
+    # MeshFunction for boundaries ids
+    facet_marker = dlfn.MeshFunction("size_t", mesh, mesh.topology().dim() - 1)
+    facet_marker.set_all(0)
+
+    # mark boundaries
+    BoundaryMarkers = SphericalHalfAnnulusBoundaryMarkers
+    gamma_inner = CircularBoundary(mesh=mesh, radius=ri)
+    gamma_inner.mark(facet_marker, BoundaryMarkers.interior_boundary.value)
+    gamma_outer = CircularBoundary(mesh=mesh, radius=ro)
+    gamma_outer.mark(facet_marker, BoundaryMarkers.exterior_boundary.value)
+
+    if dim == 2:
+        gamma_bottom = dlfn.CompiledSubDomain("near(x[1], 0.0) && on_boundary")
+    else:
+        gamma_bottom = dlfn.CompiledSubDomain("near(x[2], 0.0) && on_boundary")
+
+    gamma_bottom.mark(facet_marker, BoundaryMarkers.bottom_boundary.value)
+
+    return mesh, facet_marker
+
+
+def tire(dim, type, n_refinements=0):
+    """
+    Creates the mesh of a spherical shell using the mshr module.
+    """
+    assert isinstance(dim, int)
+    assert dim == 2 or dim == 3
+    assert isinstance(type, str)
+    assert isinstance(n_refinements, int) and n_refinements >= 0 and n_refinements <= 1
+
+    if n_refinements == 0:
+        refinement_type = "_no"
+    elif n_refinements == 1:
+        assert type == "tire3Deight"
+        refinement_type = ""
+
+    if dim == 2:
+        assert type == "tire2D"
+        mesh = dlfn.Mesh()
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/" +
+                           f"{type}{refinement_type}_refin/{type}.xdmf") as infile:
+            infile.read(mesh)
+    if dim == 3:
+        assert type == "tire3Deight" or type == "tire3Dquarter"
+        mesh = dlfn.Mesh()
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}/" +
+                           f"{type}{refinement_type}_refin/{type}.xdmf") as infile:
+            infile.read(mesh)
+    assert dim == mesh.topology().dim()
+
+    if dim == 2:
+        mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() - 1)
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/{type}/" +
+                           f"{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
+            infile.read(mvc, "facet_markers")
+        facet_marker = dlfn.cpp.mesh.MeshFunctionSizet(mesh, mvc)
+
+    if dim == 3:
+        mvc = dlfn.MeshValueCollection("size_t", mesh, mesh.topology().dim() - 1)
+        with dlfn.XDMFFile(f"{getcwd()}/meshes/tire/tire3D/{type}" +
+                           f"/{type}{refinement_type}_refin/{type}_facet_markers.xdmf") as infile:
+            infile.read(mvc, "facet_markers")
+        facet_marker = dlfn.cpp.mesh.MeshFunctionSizet(mesh, mvc)
 
     return mesh, facet_marker
 

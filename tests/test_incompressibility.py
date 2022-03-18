@@ -1,0 +1,686 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+from auxiliary_classes import PointSubDomain
+from grid_generator import hyper_cube, hyper_rectangle, spherical_shell, half_spherical_shell, tire
+from grid_generator import HyperCubeBoundaryMarkers, SphericalAnnulusBoundaryMarkers, SphericalHalfAnnulusBoundaryMarkers
+from elastic_problem import ElasticProblem
+from elastic_solver import DisplacementBCType, TractionBCType, ElasticitySolver
+from elastic_law import NeoHookeIncompressible, MooneyRivlinIncompressible
+import dolfin as dlfn
+
+
+class TensileTest(ElasticProblem):
+    def __init__(self, n_points, elastic_law, main_dir=None, bc_type="floating", polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(n_points, int)
+        assert n_points > 0
+        self._n_points = n_points
+
+        assert isinstance(bc_type, str)
+        assert bc_type in ("floating", "clamped", "clamped_free", "pointwise")
+        self._bc_type = bc_type
+
+        if self._bc_type == "floating":
+            self._problem_name = "TensileTest"
+        elif self._bc_type == "clamped":
+            self._problem_name = "TensileTestClamped"
+        elif self._bc_type == "clamped_free":
+            self._problem_name = "TensileTestClampedFree"
+        elif self._bc_type == "pointwise":
+            self._problem_name = "TensileTestPointwise"
+
+        self.set_parameters(E=5.0, nu=0.5)
+
+    def setup_mesh(self):
+        # create mesh
+        self._mesh, self._boundary_markers = hyper_cube(2, self._n_points)
+
+    def set_boundary_conditions(self):
+        # boundary conditions
+        self._bcs = []
+        BCType = DisplacementBCType
+        if self._bc_type == "floating":
+            self._bcs.append((BCType.fixed_component, HyperCubeBoundaryMarkers.left.value, 0, None))
+            self._bcs.append((BCType.fixed_component, HyperCubeBoundaryMarkers.bottom.value, 1, None))
+            self._bcs.append((BCType.constant_component, HyperCubeBoundaryMarkers.right.value, 0, 0.1))
+        elif self._bc_type == "clamped":
+            self._bcs.append((BCType.fixed, HyperCubeBoundaryMarkers.left.value, None))
+            self._bcs.append((BCType.constant, HyperCubeBoundaryMarkers.right.value, (0.1, 0.0)))
+        elif self._bc_type == "clamped_free":
+            self._bcs.append((BCType.fixed, HyperCubeBoundaryMarkers.left.value, None))
+            self._bcs.append((BCType.constant_component, HyperCubeBoundaryMarkers.right.value, 0, 0.1))
+        elif self._bc_type == "pointwise":
+            gamma01 = PointSubDomain((0.0, ) * self._space_dim, tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[0], 0.0)")
+            self._bcs.append((BCType.fixed_pointwise, gamma01, None))
+            self._bcs.append((BCType.fixed_component_pointwise, gamma02, 0, None))
+            self._bcs.append((BCType.constant_component, HyperCubeBoundaryMarkers.right.value, 0, 0.1))
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # compute volume ratio
+        J = self._compute_volume_ratio()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(J)
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(self.space_dim):
+            for j in range(self.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+
+class HyperRectangleTest(ElasticProblem):
+    def __init__(self, n_points, elastic_law, main_dir=None, dim=3, top_displacement=0.1, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._n_points = n_points
+        self._problem_name = "HyperRectangleTest"
+
+        self.set_parameters(E=5.0, nu=0.5)
+
+        self._top_displacement = top_displacement
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = hyper_rectangle((-0.05, 0.0), (0.05, 1.0))
+        elif self._space_dim == 3:
+            self._mesh, self._boundary_markers = hyper_rectangle((-0.05, -0.05, 0.0), (0.05, 0.05, 1.0))
+
+    def set_boundary_conditions(self):
+
+        if self._space_dim == 2:
+            # boundary conditions
+            gamma01 = PointSubDomain((0.0, 0.0), tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[1], 0.0)")
+
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 1, None),
+                         (DisplacementBCType.constant_component, HyperCubeBoundaryMarkers.top.value,
+                          1, self._top_displacement)]
+
+        if self._space_dim == 3:
+            # boundary conditions
+            gamma01 = PointSubDomain((0.0, 0.0, 0.0), tol=1e-10)
+            gamma02 = dlfn.CompiledSubDomain("near(x[2], 0.0)")
+            gamma03 = PointSubDomain((0.0, 0.05, 0.0), tol=1e-10)
+
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma02, 2, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
+                         (DisplacementBCType.constant_component,
+                          HyperCubeBoundaryMarkers.front.value, 2, self._top_displacement)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(self.space_dim):
+            for j in range(self.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+
+class BalloonTest(ElasticProblem):
+    def __init__(self, n_refinments, elastic_law, main_dir=None, dim=3, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._n_refinements = n_refinments
+        self._problem_name = "BalloonTest"
+
+        self.set_parameters(E=5.0, nu=0.5)
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = spherical_shell(2, (0.9, 1.0), self._n_refinements)
+        elif self._space_dim == 3:
+            self._mesh, self._boundary_markers = spherical_shell(3, (0.9, 1.0), self._n_refinements)
+
+    def set_boundary_conditions(self):
+        if self._space_dim == 2:
+            gamma01 = PointSubDomain((0.0, -1.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
+
+        if self._space_dim == 3:
+            gamma01 = PointSubDomain((0.0, 0.0, -1.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_pointwise, gamma01, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.interior_boundary.value, - 0.2),
+                         (TractionBCType.constant_pressure,
+                          SphericalAnnulusBoundaryMarkers.exterior_boundary.value, - 0.1)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(self.space_dim):
+            for j in range(self.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+
+class HalfBalloonTest(ElasticProblem):
+    def __init__(self, n_refinments, elastic_law, main_dir=None, dim=3, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._n_refinements = n_refinments
+        self._problem_name = "BalloonTest"
+
+        self.set_parameters(E=5.0, nu=0.5)
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = half_spherical_shell(2, (0.5, 1.0), self._n_refinements)
+        elif self._space_dim == 3:
+            self._mesh, self._boundary_markers = half_spherical_shell(3, (0.9, 1.0), self._n_refinements)
+
+    def set_boundary_conditions(self):
+        if self._space_dim == 2:
+            gamma01 = PointSubDomain((0.0, 1.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 0, None),
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 1, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.1)]
+
+        if self._space_dim == 3:
+            gamma01 = PointSubDomain((1.0, 0.0, 0.0), tol=1e-10)
+            gamma03 = PointSubDomain((0.0, 1.0, 0.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 1, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value, -0.1)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(self.space_dim):
+            for j in range(self.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+
+class IterativeScalingHalfBalloonTest(ElasticProblem):
+    def __init__(self, n_refinments, elastic_law, main_dir=None, dim=3, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._n_refinements = n_refinments
+        self._problem_name = "IterativeScalingBalloonTest"
+
+        self.set_parameters(E=5.0, nu=0.5)
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = half_spherical_shell(2, (0.5, 1.0), self._n_refinements)
+        elif self._space_dim == 3:
+            self._mesh, self._boundary_markers = half_spherical_shell(3, (0.9, 1.0), self._n_refinements)
+
+    def set_boundary_conditions(self):
+        if self._space_dim == 2:
+            gamma01 = PointSubDomain((0.0, 1.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 0, None),
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 1, None),
+                         (TractionBCType.constant_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value, 0.0),
+                         (TractionBCType.function_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value,
+                          dlfn.Expression("-scaling_factor * .6", scaling_factor=1.1, degree=0))]
+
+        if self._space_dim == 3:
+            gamma01 = PointSubDomain((1.0, 0.0, 0.0), tol=1e-10)
+            gamma03 = PointSubDomain((0.0, 1.0, 0.0), tol=1e-10)
+            self._bcs = [(DisplacementBCType.fixed_component_pointwise, gamma01, 1, None),
+                         (DisplacementBCType.fixed_component_pointwise, gamma03, 0, None),
+                         (DisplacementBCType.fixed_component,
+                          SphericalHalfAnnulusBoundaryMarkers.bottom_boundary.value, 2, None),
+                         (TractionBCType.function_pressure,
+                          SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value,
+                          dlfn.Expression(("-scaling_factor * 0.1"), scaling_factor=0.0, degree=0))]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(self.space_dim):
+            for j in range(self.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+        # compute surface average of the Lagrange Multiplier
+        dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
+        A_inner = dlfn.assemble(dlfn.Constant(1.0) * dA(SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value))
+        A_outer = dlfn.assemble(dlfn.Constant(1.0) * dA(SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value))
+        solver = self._get_solver()
+        displacement, pressure = solver.solution.split(True)
+        print("Volume-averaged Lagrange Multiplier: ")
+        avg_pressure_inner = dlfn.assemble(pressure *
+                                           dA(SphericalHalfAnnulusBoundaryMarkers.interior_boundary.value)) / A_inner
+        avg_pressure_outer = dlfn.assemble(pressure *
+                                           dA(SphericalHalfAnnulusBoundaryMarkers.exterior_boundary.value)) / A_outer
+        print("Avg. Lagrange Multiplier inner:")
+        print(avg_pressure_inner)
+        print("Avg. Lagrange Multiplier outer:")
+        print(avg_pressure_outer)
+        print()
+
+    def solve_problem(self):
+        """
+        Solve the stationary problem.
+        """
+        # setup mesh
+        self.setup_mesh()
+        assert self._mesh is not None
+        self._space_dim = self._mesh.geometry().dim()
+        self._n_cells = self._mesh.num_cells()
+
+        # setup boundary conditions
+        self.set_boundary_conditions()
+
+        # setup body force
+        self.set_body_force()
+
+        # setup parameters
+        if not hasattr(self, "_C"):
+            self.set_parameters()
+
+        # create solver object
+        if not hasattr(self, "_elastic_solver"):
+            self._elastic_solver = \
+                ElasticitySolver(self._mesh, self._boundary_markers,
+                                 self._elastic_law, polynomial_degree=self._polynomial_degree)
+
+        # pass boundary conditions
+        self._elastic_solver.set_boundary_conditions(self._bcs)
+
+        # pass dimensionless numbers
+        if hasattr(self, "_D"):
+            self._get_solver().set_dimensionless_numbers(self._C, self._B, self._D,)
+        else:
+            self._get_solver().set_dimensionless_numbers(self._C, self._B)
+
+        # pass body force
+        if hasattr(self, "_body_force"):
+            self._elastic_solver.set_body_force(self._body_force)
+
+        # solve problem
+        if self._D is not None:
+            dlfn.info("Solving problem with C = {0:.2f} and "
+                      "D = {1:0.2f}".format(self._C, self._D))
+        else:
+            dlfn.info("Solving problem with C = {0:.2f}".format(self._C))
+
+        from os import getcwd
+        ufile = dlfn.File(f"{getcwd()}/results/velocity.pvd")
+        pfile = dlfn.File(f"{getcwd()}/results/pressure.pvd")
+        import numpy as np
+        linRange = np.linspace(0.0, 1.0, num=11, endpoint=True)
+        print(linRange)
+        for load_scaling in linRange:
+            print(load_scaling)
+            self._elastic_solver.set_scaling_factor(load_scaling)
+            self._elastic_solver.solve()
+
+            solver = self._get_solver()
+            u, p = solver.solution.split(True)
+            ufile << u
+            pfile << p
+        # postprocess solution
+        self.postprocess_solution()
+
+        # write XDMF-files
+        self._write_xdmf_file()
+
+
+class TireTest(ElasticProblem):
+    def __init__(self, tire_type, n_refinments, elastic_law, main_dir=None, dim=2, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._tire_type = tire_type
+        self._n_refinements = n_refinments
+        self._problem_name = "TireTest"
+
+        self.set_parameters(E=5.0, nu=0.5, lref=0.2, uref=0.1)
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = tire(2, self._tire_type, self._n_refinements)
+        if self._space_dim == 3:
+            self._mesh, self._boundary_markers = tire(3, self._tire_type, self._n_refinements)
+
+    def set_boundary_conditions(self):
+
+        if self._space_dim == 2:
+            self._bcs = [(DisplacementBCType.fixed, 301, None),
+                         (TractionBCType.constant_pressure, 200, - 0.001 / 3.0),
+                         (TractionBCType.constant_pressure, 100, - 0.001 / 3.0)]
+        if self._space_dim == 3:
+            self._bcs = [(DisplacementBCType.fixed, 301, None),
+                         (DisplacementBCType.fixed_component, 1000, 2, None),
+                         (DisplacementBCType.fixed_component, 2000, 1, None),
+                         (TractionBCType.constant_pressure, 200, - 0.001 / 3.0),
+                         (TractionBCType.constant_pressure, 100, - 0.001 / 3.0)]
+            if self._tire_type == "tire3Deight":
+                # At test with eights of a tire add additional BC on cuttingplane at middle
+                self._bcs.append((DisplacementBCType.fixed_component, 3000, 0, None))
+            elif self._tire_type == "tire3Deight_smooth":
+                # At test with eights of a tire add additional BC on cuttingplane at middle
+                self._bcs.append((DisplacementBCType.fixed_component, 600, 0, None))
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
+        self._add_to_field_output(self._compute_equiv_stresses())
+        # compute volume average of the stress tensor
+        dV = dlfn.Measure("dx", domain=self._mesh)
+        V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+        print("Volume-averaged stresses: ")
+        for i in range(self.space_dim):
+            for j in range(self.space_dim):
+                avg_stress = dlfn.assemble(stress_tensor[i, j] * dV) / V
+                print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+
+        solver = self._get_solver()
+        dA = dlfn.Measure("ds", domain=self._mesh, subdomain_data=self._boundary_markers)
+        u, p = solver.solution.split(True)
+
+        from ufl import inv, cofac
+        from dolfin import grad
+
+        I = dlfn.Identity(self._space_dim)
+        # deformation gradient
+        F = I + self._B * grad(u)
+        # normal transform
+        self._normal_transform = cofac(F.T) * dlfn.FacetNormal(self._mesh)
+        # volume ratio
+        J = dlfn.det(F)
+        # right Cauchy-Green tensor
+        C = F.T * F
+        # right Cauchy-Green tensor for isochoric deformation
+        # C_iso = J ** (- 2 / 3) * C
+
+        # 2. Piola-Kirchhoff stress
+        S_vol = J * p * inv(C)
+        S_iso = J ** (- 2 / self._space_dim) * I - 1 / self._space_dim * J ** (- 2 / self._space_dim) * dlfn.tr(C) * inv(C)
+        S = S_vol + S_iso
+
+        sigma = (F * S * F.T) / J
+
+        P = J * sigma * inv(F.T)
+
+        traction_value = dlfn.assemble(dlfn.dot(- 0.001 / 3.0 * self._normal_transform,
+                                                dlfn.FacetNormal(self._mesh)) * dA(100))
+        piola_part = dlfn.assemble(dlfn.dot(P * dlfn.FacetNormal(self._mesh),
+                                            dlfn.FacetNormal(self._mesh)) * dA(100))
+
+        print(f'traction value: {traction_value}')
+        print(f'piola part: {piola_part}')
+
+
+class IterativeTireTest(ElasticProblem):
+    def __init__(self, tire_type, n_refinments, elastic_law, p_diff, main_dir=None, dim=2, polynomial_degree=2):
+        super().__init__(elastic_law, main_dir, polynomial_degree=polynomial_degree)
+
+        assert isinstance(dim, int)
+        self._space_dim = dim
+
+        self._tire_type = tire_type
+        self._p_diff = p_diff
+        self._n_refinements = n_refinments
+        self._problem_name = "TireTest"
+
+        self.set_parameters(E=2.7, nu=0.5)
+
+    def setup_mesh(self):
+        # create mesh
+        if self._space_dim == 2:
+            self._mesh, self._boundary_markers = tire(2, self._tire_type, self._n_refinements)
+        if self._space_dim == 3:
+            self._mesh, self._boundary_markers = tire(3, self._tire_type, self._n_refinements)
+
+    def set_boundary_conditions(self):
+
+        if self._space_dim == 2:
+            self._bcs = [(DisplacementBCType.fixed, 301, None),
+                         (TractionBCType.constant_pressure, 200, - self._p_diff),
+                         (TractionBCType.constant_pressure, 100, - self._p_diff)]
+
+    def postprocess_solution(self):
+        # compute stresses
+        stress_tensor = self._compute_stress_tensor()
+        # add stress components to the field output
+        component_indices = []
+        for i in range(self.space_dim):
+            for j in range(i, self.space_dim):
+                component_indices.append((i + 1, j + 1))
+        for k, stress in enumerate(stress_tensor.split()):
+            stress.rename("S{0}{1}".format(*component_indices[k]), "")
+            self._add_to_field_output(stress)
+        self._add_to_field_output(self._compute_volume_ratio())
+        self._add_to_field_output(self._compute_pressure())
+        self._add_to_field_output(self._compute_equiv_stresses())
+
+
+def test_tensile_test():
+    for elastic_law in [NeoHookeIncompressible(), MooneyRivlinIncompressible(7./8., -1./8.)]:
+        for bc_type in ("floating", "clamped", "clamped_free", "pointwise"):
+            tensile_test = TensileTest(25, elastic_law, bc_type=bc_type)
+            print(f"Running {tensile_test._problem_name} with {bc_type} boundary condition type.")
+            tensile_test.solve_problem()
+            print()
+
+
+def test_hyper_rectangle(elastic_law, top_displacement=-0.1, dim=3):
+    hyper_rectangle_test = HyperRectangleTest(25, elastic_law, top_displacement=top_displacement, dim=dim)
+    print(f"Elastic law: {hyper_rectangle_test._elastic_law.name}")
+    print(f"Running {hyper_rectangle_test._problem_name} with top displacemt {hyper_rectangle_test._top_displacement}.")
+    hyper_rectangle_test.solve_problem()
+    print()
+
+    # compute volume average of the stress tensor
+    dV = dlfn.Measure("dx", domain=hyper_rectangle_test._mesh)
+    V = dlfn.assemble(dlfn.Constant(1.0) * dV)
+    solver = hyper_rectangle_test._get_solver()
+    u, p = solver.solution.split(True)
+
+    from ufl import inv
+    from dolfin import grad
+
+    I = dlfn.Identity(hyper_rectangle_test._space_dim)
+    # deformation gradient
+    F = I + hyper_rectangle_test._B * grad(u)
+    # volume ratio
+    J = dlfn.det(F)
+    # right Cauchy-Green tensor
+
+    sigma = hyper_rectangle_test._compute_stress_tensor()
+
+    P = J * sigma * inv(F.T)
+    print("Volume-averaged stresses: ")
+    for i in range(hyper_rectangle_test.space_dim):
+        for j in range(hyper_rectangle_test.space_dim):
+            avg_stress = dlfn.assemble(P[i, j] * dV) / V
+            print("({0},{1}) : {2:8.2e}".format(i, j, avg_stress))
+    print()
+    return (dlfn.assemble(P[hyper_rectangle_test._space_dim - 1, hyper_rectangle_test._space_dim - 1] * dV) / V)
+
+
+def test_hyper_rectangle_iteration(elastic_law):
+    import numpy as np
+    displacements = np.linspace(-0.4, 1.4, num=2)
+    stresses = []
+    for displacement in displacements:
+        stresses.append(test_hyper_rectangle(elastic_law, top_displacement=displacement))
+
+    for i in range(len(displacements)):
+        print(f"{displacements[i]+1.0} {stresses[i]}")
+
+
+def test_J_convergence():
+    for elastic_law in [NeoHookeIncompressible()]:
+        number_points = [10, 20, 30, 40, 50]
+        errors_J = []
+        mesh_sizes = []
+
+        for points in number_points:
+            tensile_test = TensileTest(points, elastic_law, bc_type="clamped")
+            tensile_test.solve_problem()
+            J = tensile_test._compute_volume_ratio()
+            dV = dlfn.Measure("dx", domain=tensile_test._mesh)
+            error_J = dlfn.assemble((J - dlfn.Constant(1.0)) ** 2 * dV)
+            errors_J.append(error_J)
+            mesh_sizes.append(tensile_test._mesh.hmax())
+
+        print(mesh_sizes)
+        print(errors_J)
+
+
+def test_ballon(dim=2):
+    ballon_test = BalloonTest(0, NeoHookeIncompressible(), dim=dim)
+    ballon_test.solve_problem()
+
+
+def test_half_ballon(dim=2):
+    ballon_test = HalfBalloonTest(0, NeoHookeIncompressible(), dim=dim)
+    ballon_test.solve_problem()
+
+
+def test_scaling_half_ballon(dim=2):
+    ballon_test = IterativeScalingHalfBalloonTest(0, NeoHookeIncompressible(), dim=dim)
+    ballon_test.solve_problem()
+
+
+def test_tire(tire_type, n_refinments=0, dim=2):
+    tire_test = TireTest(tire_type, n_refinments, NeoHookeIncompressible(), dim=dim)
+    tire_test.solve_problem()
+
+
+def iterative_test_tire():
+    import numpy as np
+
+    linRange = np.linspace(0.0, 10.0, num=101, endpoint=True)
+    displacements = []
+    for p in linRange:
+        print(f"Pressure difference is: {p} bar")
+        tire_test = IterativeTireTest("tire2D", 0, MooneyRivlinIncompressible(7./8., -1./8.), p * 0.001 / 9.0)
+        tire_test.solve_problem()
+        solver = tire_test._get_solver()
+        u, _ = solver.solution.split(True)
+        from math import sqrt
+        displacement = u((0.0, 0.79))
+        displacements.append(sqrt(displacement[0]**2 + displacement[1]**2))
+        print()
+    transformed_displacements = 0.2 * 1000.0 * np.array(displacements)
+
+    for i, p in enumerate(linRange):
+        print(f"{p} {transformed_displacements[i]}")
+
+
+if __name__ == "__main__":
+    test_tensile_test()
+    test_hyper_rectangle(NeoHookeIncompressible())
+    test_hyper_rectangle_iteration(MooneyRivlinIncompressible(7./8., -1./8.))
+    test_J_convergence()
+    test_half_ballon(dim=2)
+    test_scaling_half_ballon(dim=2)
+    test_tire("tire2D", dim=2)
+    iterative_test_tire()
